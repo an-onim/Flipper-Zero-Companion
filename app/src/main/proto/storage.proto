@@ -1,0 +1,22 @@
+// Minimal subset of PB_Storage schema for UI mocks. The fields / wire tags match
+// https://github.com/flipperdevices/flipperzero-protobuf/blob/dev/storage.proto
+// TODO(rpc): replace with the complete VERSION-PINNED upstream schema.
+syntax = "proto3";
+package PB_Storage;
+option java_package = "com.flipperdevices.protobuf.storage";
+option java_outer_classname = "StorageProto";
+
+message File {
+  enum FileType {
+    FILE = 0;
+    DIR = 1;
+  }
+  FileType type = 1;
+  string name = 2;
+  uint32 size = 3;
+  bytes data = 4;
+  string md5sum = 5;
+}
+message ListResponse {
+  repeated File file = 1;
+}

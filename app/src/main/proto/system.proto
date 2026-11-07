@@ -1,0 +1,16 @@
+// Minimal subset of PB_System schema for UI mocks. The fields / wire tags match
+// https://github.com/flipperdevices/flipperzero-protobuf/blob/dev/system.proto
+// TODO(rpc): replace with the complete VERSION-PINNED upstream schema.
+syntax = "proto3";
+package PB_System;
+option java_package = "com.flipperdevices.protobuf.system";
+option java_outer_classname = "SystemProto";
+
+message DeviceInfoResponse {
+  string key = 1;
+  string value = 2;
+}
+message PowerInfoResponse {
+  string key = 1;
+  string value = 2;
+}
