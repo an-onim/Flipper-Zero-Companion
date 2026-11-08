@@ -56,8 +56,6 @@ fun MainScreen(
             it.route == navBackStack?.destination?.route
         } ?: MainTab.DEVICE
 
-        val colors = MaterialTheme.colorScheme
-
         Scaffold(
             topBar = {
                 TopAppBar(

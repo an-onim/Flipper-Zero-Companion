@@ -6,7 +6,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import dev.filpper.companion.domain.model.ThemePreference
+import dev.filpper.companion.domain.model.ThemeMode
 
 private val Orange = Color(0xFFFF8200)
 private val OrangeLight = Color(0xFFFFA640)
@@ -131,13 +131,13 @@ private val DarkColors = darkColorScheme(
 
 @Composable
 fun FlipperTheme(
-    preference: ThemePreference,
+    preference: ThemeMode,
     content: @Composable (isDark: Boolean) -> Unit,
 ) {
     val isDark = when (preference) {
-        ThemePreference.SYSTEM -> isSystemInDarkTheme()
-        ThemePreference.LIGHT -> false
-        ThemePreference.DARK -> true
+        ThemeMode.SYSTEM -> isSystemInDarkTheme()
+        ThemeMode.LIGHT -> false
+        ThemeMode.DARK -> true
     }
     MaterialTheme(colorScheme = if (isDark) DarkColors else LightColors) {
         content(isDark)

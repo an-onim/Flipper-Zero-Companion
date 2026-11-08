@@ -4,10 +4,10 @@ import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
-import dev.filpper.companion.data.BleConnectionRepositoryImpl
+import dev.filpper.companion.data.repository.BleConnectionRepositoryImpl
 import dev.filpper.companion.data.mock.MockFlipperDeviceInfoRepository
 import dev.filpper.companion.data.mock.MockFlipperFileRepository
-import dev.filpper.companion.data.ThemeRepositoryImpl
+import dev.filpper.companion.data.repository.ThemeRepositoryImpl
 import dev.filpper.companion.domain.repository.BleConnectionRepository
 import dev.filpper.companion.domain.repository.FlipperDeviceInfoRepository
 import dev.filpper.companion.domain.repository.FlipperFileRepository

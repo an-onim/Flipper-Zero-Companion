@@ -1,4 +1,4 @@
-package dev.filpper.companion.data
+package dev.filpper.companion.data.repository
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -6,6 +6,8 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCallback
+import android.bluetooth.BluetoothGattCharacteristic
+import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.le.BluetoothLeScanner
@@ -19,10 +21,19 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.location.LocationManager
 import android.os.Build
+import android.util.Log
+import androidx.annotation.RequiresPermission
 import androidx.core.content.ContextCompat
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import dagger.hilt.android.qualifiers.ApplicationContext
+import dev.filpper.companion.data.Utils.toUInt
+import dev.filpper.companion.data.bluetooth.GattManager
+import dev.filpper.companion.data.bluetooth.FlipperGattUuid
+import dev.filpper.companion.data.bluetooth.FlipperGattUuid.getByUuid
+import dev.filpper.companion.data.bluetooth.RpcSender
+import dev.filpper.companion.data.bluetooth.RpcStatus
 import dev.filpper.companion.domain.model.BleConnectionState
 import dev.filpper.companion.domain.model.BleDevice
 import dev.filpper.companion.domain.model.BleFailure
@@ -38,6 +49,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.nio.ByteOrder
 import javax.inject.Inject
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -53,15 +65,25 @@ class BleConnectionRepositoryImpl @Inject constructor(
     private val adapter: BluetoothAdapter?
         get() = context.getSystemService(BluetoothManager::class.java)?.adapter
 
-    private val _connection = MutableStateFlow<BleConnectionState>(BleConnectionState.Disconnected)
-    override val connection = _connection.asStateFlow()
-    private val isDeviceConnectedKey = booleanPreferencesKey(SettingsStore.Key.IS_DEVICE_CONNECTED)
+    private val _isScanning = MutableStateFlow(false)
+    override val isScanning = _isScanning.asStateFlow()
 
     private val _discoveredDevices = MutableStateFlow<List<BleDevice>>(emptyList())
     override val discoveredDevices = _discoveredDevices.asStateFlow()
 
-    private val _isScanning = MutableStateFlow(false)
-    override val isScanning = _isScanning.asStateFlow()
+    private val isDeviceConnectedKey = booleanPreferencesKey(SettingsStore.Key.IS_DEVICE_CONNECTED)
+    private val _connection = MutableStateFlow<BleConnectionState>(BleConnectionState.Disconnected)
+    override val connection = _connection.asStateFlow()
+
+
+    private val rpcStatusKey = intPreferencesKey(SettingsStore.Key.RPC_SESSION_STATUS)
+    private val _rpcStatus = MutableStateFlow(RpcStatus.NOT_ACTIVE)
+    override val rpcStatus = _rpcStatus.asStateFlow()
+    // TODO(rcp) if status=0 forbid new rpc-commands, to unready state; 1 - make session active
+
+    private var maxAvailableBytesToSend: UInt = 0u
+    private var availableBytesToSend: UInt = 0u
+
 
     private var activeScanner: BluetoothLeScanner? = null
     private var scanTimeout: Job? = null
@@ -151,9 +173,9 @@ class BleConnectionRepositoryImpl @Inject constructor(
         } catch (_: SecurityException) {
             stopScanInternal()
             fail(BleFailure.PermissionMissing)
-        } catch (_: IllegalStateException) {
+        } catch (e: IllegalStateException) {
             stopScanInternal()
-            fail(BleFailure.Unknown)
+            fail(BleFailure.Unknown())
         }
     }
 
@@ -193,10 +215,10 @@ class BleConnectionRepositoryImpl @Inject constructor(
                 delay(PAIRING_TIMEOUT_MS.milliseconds)
                 if (_connection.value is BleConnectionState.Pairing) fail(BleFailure.TimedOut)
             }
-        } catch (_: SecurityException) {
-            fail(BleFailure.PermissionMissing)
-        } catch (_: IllegalArgumentException) {
-            fail(BleFailure.Unknown)
+        } catch (e: SecurityException) {
+            fail(BleFailure.PermissionMissing, e)
+        } catch (e: IllegalArgumentException) {
+            fail(BleFailure.Unknown(e.message), e)
         }
     }
 
@@ -207,7 +229,20 @@ class BleConnectionRepositoryImpl @Inject constructor(
         saveConnectionState(BleConnectionState.Disconnected)
     }
 
+    fun updateAvailableBytesBound(value: ByteArray) {
+        maxAvailableBytesToSend = value.toUInt(ByteOrder.BIG_ENDIAN) ?: 0u
+    }
+
+    fun saveRpcState(value: RpcStatus) {
+        Log.v("OPOPO", "BleConnectionRepo -> saveRpcState $value")
+        scope.launch {
+            _rpcStatus.value = value
+            context.settingsStore.edit { preferences -> preferences[rpcStatusKey] = value.code.toInt() }
+        }
+    }
+
     override fun saveConnectionState(value: BleConnectionState) {
+        Log.v("OPOPO", "BleConnectionRepo -> saveConnectionState $value")
         scope.launch {
             _connection.value = value
             context.settingsStore.edit { preferences -> preferences[isDeviceConnectedKey] = value is BleConnectionState.Connected }
@@ -215,8 +250,7 @@ class BleConnectionRepositoryImpl @Inject constructor(
     }
 
     private fun hasConnectPermission(): Boolean = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
-        ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) ==
-        PackageManager.PERMISSION_GRANTED
+        ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
 
     private fun hasScanPermission(): Boolean {
         val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -265,10 +299,10 @@ class BleConnectionRepositoryImpl @Inject constructor(
         if (scanner != null) {
             try {
                 scanner.stopScan(scanCallback)
-            } catch (_: SecurityException) {
-                // Permission revoked during scanning; the OS stops the scan.
-            } catch (_: IllegalStateException) {
-                // Bluetooth was disabled during scanning.
+            } catch (e: SecurityException) {
+                Log.e("OPOPO", "BleConnectionRepo -> stopScanInternal. Permission revoked during scanning; the OS stops the scan. ${e.message} ${e.stackTraceToString()}")
+            } catch (e: IllegalStateException) {
+                Log.e("OPOPO", "BleConnectionRepo -> stopScanInternal. Bluetooth was disabled during scanning. ${e.message} ${e.stackTraceToString()}")
             }
         }
     }
@@ -281,6 +315,7 @@ class BleConnectionRepositoryImpl @Inject constructor(
             val callback = object : BluetoothGattCallback() {
                 override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
                     if (!isCurrentGatt(gatt)) return
+                    Log.v("OPOPO", "BleConnectionRepo -> onConnectionStateChange status=$status newState=$newState")
                     when {
                         status != BluetoothGatt.GATT_SUCCESS -> failGatt(
                             gatt,
@@ -304,17 +339,135 @@ class BleConnectionRepositoryImpl @Inject constructor(
 
                 override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
                     if (!isCurrentGatt(gatt)) return
+                    Log.v("OPOPO", "BleConnectionRepo -> onServicesDiscovered status=$status")
                     if (status == BluetoothGatt.GATT_SUCCESS) {
-                        connectTimeout?.cancel()
-                        connectTimeout = null
-                        // TODO(rpc): validate Flipper RPC service/characteristic UUIDs,
-                        // enable CCCD notifications, negotiate MTU, implement framing.
-                        saveConnectionState(BleConnectionState.Connected(device))
+                        if (!GattManager.validateGattConnection(gatt)) {
+                            failGatt(gatt, BleFailure.InvalidGattProfile)
+                            return
+                        }
+
+                        // enable CCCD notifications: start here and continue in onDescriptorWrite
+                        GattManager.initSubscribingQueue(gatt)
+                        GattManager.processNextSubscription(gatt)?.let { error ->
+                            // if we have error as result - handle it
+                            failGatt(gatt, error)
+                        }
+
+                        // save connected state only after all cccd are set in onDescriptorWrite
                     } else {
                         failGatt(gatt, BleFailure.ServiceDiscoveryFailed(status))
                     }
                 }
+
+                override fun onDescriptorWrite(gatt: BluetoothGatt, descriptor: BluetoothGattDescriptor?, status: Int) {
+                    if (!isCurrentGatt(gatt)) return
+                    if (status != BluetoothGatt.GATT_SUCCESS) {
+                        failGatt(gatt, BleFailure.EnableCCCDProblem)
+                        return
+                    }
+                    Log.v("OPOPO", "BleConnectionRepo -> onDescriptorWrite descriptor ${descriptor?.uuid?.getByUuid()}")
+                    when(descriptor?.uuid) {
+                        FlipperGattUuid.Characteristic.TX.uuid -> {
+                            // start enabling cccd for the next characteristic
+                            GattManager.processNextSubscription(gatt)?.let { error ->
+                                // if we have error as result - handle it
+                                failGatt(gatt, error)
+                            }
+                        }
+                        FlipperGattUuid.Characteristic.FLOW_CONTROL.uuid -> {
+                            // start enabling cccd for the next characteristic
+                            GattManager.processNextSubscription(gatt)?.let { error ->
+                                // if we have error as result - handle it
+                                failGatt(gatt, error)
+                            }
+                        }
+                        FlipperGattUuid.Characteristic.RPC_STATUS.uuid -> {
+                            onEnableAllCCCD(gatt, device)
+                        }
+                    }
+                }
+
+
+                override fun onCharacteristicRead(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
+                    if (!isCurrentGatt(gatt)) return
+                    if (status != BluetoothGatt.GATT_SUCCESS) {
+                        failGatt(gatt, BleFailure.RPCError)
+                        return
+                    }
+                    Log.v("OPOPO", "BleConnectionRepo -> onCharacteristicRead characteristic ${characteristic.uuid}")
+
+                    when(characteristic.uuid) {
+                        FlipperGattUuid.Characteristic.RPC_STATUS.uuid -> RpcStatus.fromBytes(characteristic.value).let {
+                            saveRpcState(it)
+                            if (it == RpcStatus.ACTIVE) {
+                                GattManager.readFlowControl(gatt).let{ result ->
+                                    if (!result) failGatt(gatt, BleFailure.RPCReadError("FlowControl"))
+                                }
+                            }
+                        }
+                        FlipperGattUuid.Characteristic.FLOW_CONTROL.uuid -> updateAvailableBytesBound(characteristic.value)
+                    }
+                }
+
+                override fun onCharacteristicRead(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray, status: Int) {
+                    if (!isCurrentGatt(gatt)) return
+                    if (status != BluetoothGatt.GATT_SUCCESS) {
+                        failGatt(gatt, BleFailure.RPCError)
+                        return
+                    }
+                    Log.v("OPOPO", "BleConnectionRepo -> onCharacteristicRead characteristic ${characteristic.uuid} value=${value.contentToString()}")
+
+                    when(characteristic.uuid) {
+                        FlipperGattUuid.Characteristic.RPC_STATUS.uuid -> RpcStatus.fromBytes(value).let {
+                            saveRpcState(it)
+                            if (it == RpcStatus.ACTIVE) {
+                                GattManager.readFlowControl(gatt).let{ result ->
+                                    if (!result) failGatt(gatt, BleFailure.RPCReadError("FlowControl"))
+                                }
+                            }
+                        }
+                        FlipperGattUuid.Characteristic.FLOW_CONTROL.uuid -> updateAvailableBytesBound(value)
+                    }
+                }
+
+
+                override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
+                    if (!isCurrentGatt(gatt)) return
+                    Log.v("OPOPO", "BleConnectionRepo -> onCharacteristicChanged characteristic ${characteristic.uuid}")
+
+                    when(characteristic.uuid) {
+                        FlipperGattUuid.Characteristic.TX.uuid -> handleIncoming(characteristic.value)
+                        FlipperGattUuid.Characteristic.RPC_STATUS.uuid -> RpcStatus.fromBytes(characteristic.value).let {
+                            saveRpcState(it)
+                            if (it == RpcStatus.ACTIVE) {
+                                GattManager.readFlowControl(gatt).let{ result ->
+                                    if (!result) failGatt(gatt, BleFailure.RPCReadError("FlowControl"))
+                                }
+                            }
+                        }
+                        FlipperGattUuid.Characteristic.FLOW_CONTROL.uuid -> updateAvailableBytesBound(characteristic.value)
+                    }
+                }
+
+                override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray) {
+                    if (!isCurrentGatt(gatt)) return
+                    Log.v("OPOPO", "BleConnectionRepo -> onCharacteristicChanged characteristic ${characteristic.uuid} value=${value.contentToString()}")
+
+                    when(characteristic.uuid) {
+                        FlipperGattUuid.Characteristic.TX.uuid -> handleIncoming(value)
+                        FlipperGattUuid.Characteristic.RPC_STATUS.uuid -> RpcStatus.fromBytes(value).let {
+                            saveRpcState(it)
+                            if (it == RpcStatus.ACTIVE) {
+                                GattManager.readFlowControl(gatt).let{ result ->
+                                    if (!result) failGatt(gatt, BleFailure.RPCReadError("FlowControl"))
+                                }
+                            }
+                        }
+                        FlipperGattUuid.Characteristic.FLOW_CONTROL.uuid -> updateAvailableBytesBound(value)
+                    }
+                }
             }
+
             val gatt = remote.connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE)
             if (gatt == null) {
                 fail(BleFailure.ConnectionFailed(-1))
@@ -334,26 +487,43 @@ class BleConnectionRepositoryImpl @Inject constructor(
         }
     }
 
-    private fun isCurrentGatt(gatt: BluetoothGatt): Boolean = synchronized(gattLock) {
-        currentGatt === gatt
+    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
+    private fun onEnableAllCCCD(gatt: BluetoothGatt, device: BleDevice) {
+        Log.v("OPOPO", "BleConnectionRepo -> onEnableAllCCCD. all cccd are set - now we are fully connected")
+        connectTimeout?.cancel()
+        connectTimeout = null
+        saveConnectionState(BleConnectionState.Connected(device))
+
+        // extra read RPC_STATUS characteristic, see result in onCharacteristicRead()
+        GattManager.readRpcStatus(gatt).let { result ->
+            if (!result) failGatt(gatt, BleFailure.RPCReadError("RpcStatus"))
+        }
+        // read initial FLOW_CONTROL is after successful readRpcStatus - see onCharacteristicRead()
     }
 
-    private fun failGatt(gatt: BluetoothGatt, reason: BleFailure) {
-        if (!isCurrentGatt(gatt)) return
-        closeCurrentGatt()
-        saveConnectionState(BleConnectionState.Failed(reason))
+    private fun handleIncoming(value: ByteArray) {
+        // TODO(rpc) handle incoming bytes from TX
+    }
+
+    private fun isCurrentGatt(gatt: BluetoothGatt): Boolean = synchronized(gattLock) {
+        currentGatt === gatt
     }
 
     @SuppressLint("MissingPermission")
     private fun closeCurrentGatt() {
         connectTimeout?.cancel()
         connectTimeout = null
+
+        saveRpcState(RpcStatus.NOT_ACTIVE)
+        maxAvailableBytesToSend = 0u
+
         val gatt = synchronized(gattLock) {
             currentGatt.also { currentGatt = null }
         }
         try {
             gatt?.disconnect()
-        } catch (_: SecurityException) {
+        } catch (e: SecurityException) {
+            Log.e("OPOPO", "BleConnectionRepo -> stopScanInternal. ${e.message} ${e.stackTraceToString()}")
         } finally {
             gatt?.close()
         }
@@ -369,7 +539,17 @@ class BleConnectionRepositoryImpl @Inject constructor(
         }
     }
 
-    private fun fail(reason: BleFailure) {
+
+    private fun failGatt(gatt: BluetoothGatt, reason: BleFailure) {
+        if (!isCurrentGatt(gatt)) return
+        Log.v("OPOPO", "BleConnectionRepo -> failGatt reason=$reason")
+        closeCurrentGatt()
+        saveConnectionState(BleConnectionState.Failed(reason))
+    }
+
+    private fun fail(reason: BleFailure, exception: Exception? = null) {
+        Log.v("OPOPO", "BleConnectionRepo -> fail reason=$reason")
+        exception?.let { e -> Log.e("OPOPO", "BleConnectionRepo -> connect error: ${e.message} ${e.stackTraceToString()}") }
         clearBondWaiting()
         saveConnectionState(BleConnectionState.Failed(reason))
     }

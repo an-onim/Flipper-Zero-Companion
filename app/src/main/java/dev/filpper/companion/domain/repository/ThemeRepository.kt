@@ -1,9 +1,9 @@
 package dev.filpper.companion.domain.repository
 
-import dev.filpper.companion.domain.model.ThemePreference
+import dev.filpper.companion.domain.model.ThemeMode
 import kotlinx.coroutines.flow.Flow
 
 interface ThemeRepository {
-    val theme: Flow<ThemePreference>
-    suspend fun setTheme(value: ThemePreference)
+    val theme: Flow<ThemeMode>
+    suspend fun setTheme(value: ThemeMode)
 }

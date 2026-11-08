@@ -1,13 +1,10 @@
-package dev.filpper.companion.data
+package dev.filpper.companion.data.repository
 
 import android.content.Context
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
-import dev.filpper.companion.domain.model.ThemePreference
+import dev.filpper.companion.domain.model.ThemeMode
 import dev.filpper.companion.domain.repository.ThemeRepository
 import dev.filpper.companion.domain.store.SettingsStore
 import dev.filpper.companion.domain.store.SettingsStore.settingsStore
@@ -20,11 +17,11 @@ class ThemeRepositoryImpl @Inject constructor(
 ) : ThemeRepository {
     private val themeKey = stringPreferencesKey(SettingsStore.Key.THEME_MODE)
 
-    override val theme: Flow<ThemePreference> = context.settingsStore.data.map { prefs ->
-        ThemePreference.entries.firstOrNull { it.name == prefs[themeKey] } ?: ThemePreference.SYSTEM
+    override val theme: Flow<ThemeMode> = context.settingsStore.data.map { prefs ->
+        ThemeMode.entries.firstOrNull { it.name == prefs[themeKey] } ?: ThemeMode.SYSTEM
     }
 
-    override suspend fun setTheme(value: ThemePreference) {
+    override suspend fun setTheme(value: ThemeMode) {
         context.settingsStore.edit { preferences -> preferences[themeKey] = value.name }
     }
 }

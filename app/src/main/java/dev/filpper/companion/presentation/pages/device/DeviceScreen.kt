@@ -50,6 +50,9 @@ import dev.filpper.companion.presentation.components.SectionTitle
 
 @Composable
 fun DeviceRoute(viewModel: DeviceViewModel = hiltViewModel()) {
+
+    // TODO(rpc): check connection state
+
     val uiState by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val permissions = remember {
@@ -243,5 +246,5 @@ private fun failureText(failure: BleFailure): String = when (failure) {
     is BleFailure.ScanFailed -> stringResource(R.string.bluetooth_scan_failed, failure.code)
     is BleFailure.ConnectionFailed -> stringResource(R.string.bluetooth_connect_failed, failure.code)
     is BleFailure.ServiceDiscoveryFailed -> stringResource(R.string.bluetooth_services_failed, failure.code)
-    BleFailure.Unknown -> stringResource(R.string.bluetooth_unknown_error)
+    is BleFailure.Unknown -> stringResource(R.string.bluetooth_unknown_error)
 }
