@@ -16,7 +16,7 @@ object FlipperGattUuid {
         FLOW_CONTROL(UUID.fromString("19ed82ae-ed21-4c9d-4145-228e63fe0000")),
         RPC_STATUS(UUID.fromString("19ed82ae-ed21-4c9d-4145-228e64fe0000"));
     }
-    fun UUID.getByUuid() = Characteristic.entries.find { it.uuid == this }
+    fun UUID.getCharacteristicByUuid() = Characteristic.entries.find { it.uuid == this }
 
     object BtSigConst {
         val CCCD = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")

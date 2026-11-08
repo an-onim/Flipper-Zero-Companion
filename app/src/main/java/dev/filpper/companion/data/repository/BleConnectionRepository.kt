@@ -31,8 +31,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dev.filpper.companion.data.Utils.toUInt
 import dev.filpper.companion.data.bluetooth.GattManager
 import dev.filpper.companion.data.bluetooth.FlipperGattUuid
-import dev.filpper.companion.data.bluetooth.FlipperGattUuid.getByUuid
-import dev.filpper.companion.data.bluetooth.RpcSender
+import dev.filpper.companion.data.bluetooth.FlipperGattUuid.getCharacteristicByUuid
 import dev.filpper.companion.data.bluetooth.RpcStatus
 import dev.filpper.companion.domain.model.BleConnectionState
 import dev.filpper.companion.domain.model.BleDevice
@@ -365,8 +364,8 @@ class BleConnectionRepositoryImpl @Inject constructor(
                         failGatt(gatt, BleFailure.EnableCCCDProblem)
                         return
                     }
-                    Log.v("OPOPO", "BleConnectionRepo -> onDescriptorWrite descriptor ${descriptor?.uuid?.getByUuid()}")
-                    when(descriptor?.uuid) {
+                    Log.v("OPOPO", "BleConnectionRepo -> onDescriptorWrite descriptor ${descriptor?.uuid} char=${descriptor?.characteristic?.uuid?.getCharacteristicByUuid()}")
+                    when(descriptor?.characteristic?.uuid) {
                         FlipperGattUuid.Characteristic.TX.uuid -> {
                             // start enabling cccd for the next characteristic
                             GattManager.processNextSubscription(gatt)?.let { error ->

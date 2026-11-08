@@ -247,4 +247,9 @@ private fun failureText(failure: BleFailure): String = when (failure) {
     is BleFailure.ConnectionFailed -> stringResource(R.string.bluetooth_connect_failed, failure.code)
     is BleFailure.ServiceDiscoveryFailed -> stringResource(R.string.bluetooth_services_failed, failure.code)
     is BleFailure.Unknown -> stringResource(R.string.bluetooth_unknown_error)
+    BleFailure.InvalidGattProfile -> stringResource(R.string.bluetooth_services_validation_failed)
+    BleFailure.RPCError,
+    BleFailure.RPCSessionInactive,
+    BleFailure.EnableCCCDProblem,
+    is BleFailure.RPCReadError -> stringResource(R.string.rpc_error)
 }

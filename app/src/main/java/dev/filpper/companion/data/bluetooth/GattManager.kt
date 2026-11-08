@@ -8,7 +8,7 @@ import android.bluetooth.BluetoothStatusCodes
 import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresPermission
-import dev.filpper.companion.data.bluetooth.FlipperGattUuid.getByUuid
+import dev.filpper.companion.data.bluetooth.FlipperGattUuid.getCharacteristicByUuid
 import dev.filpper.companion.domain.model.BleFailure
 
 object GattManager {
@@ -34,12 +34,12 @@ object GattManager {
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     fun processNextSubscription(gatt: BluetoothGatt): BleFailure? {
         val characteristic = notifySubscriptionQueue.removeFirstOrNull() ?: return BleFailure.Unknown("No characteristics in queue to make subscriptions")
-        Log.v("OPOPO", "BleSubscriptionManager -> processNextSubscription process char ${characteristic.uuid.getByUuid()}")
+        Log.v("OPOPO", "BleSubscriptionManager -> processNextSubscription process char ${characteristic.uuid.getCharacteristicByUuid()}")
 
         gatt.setCharacteristicNotification(characteristic, true)
         val descriptor = characteristic.getDescriptor(FlipperGattUuid.BtSigConst.CCCD) ?: run {
             // if we don't have the descriptor - return
-            return BleFailure.Unknown("No description CCCD for characteristics ${characteristic.uuid.getByUuid()}")
+            return BleFailure.Unknown("No description CCCD for characteristics ${characteristic.uuid.getCharacteristicByUuid()}")
         }
         Log.v("OPOPO", "BleSubscriptionManager -> processNextSubscription process CCCD description was found")
 

@@ -10,7 +10,7 @@ enum class RpcStatus(val code: UInt) {
 
     companion object {
         fun fromBytes(bytes: ByteArray): RpcStatus {
-            val code = bytes.toUInt(ByteOrder.LITTLE_ENDIAN)
+            val code = bytes.toUInt(ByteOrder.LITTLE_ENDIAN)  // TODO(run) found UNKNOWN for bytearray [1, 20, 110, 11] - first only?
             return entries.firstOrNull { it.code == code } ?: UNKNOWN
         }
 

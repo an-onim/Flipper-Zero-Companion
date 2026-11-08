@@ -49,8 +49,10 @@
     <string name="bluetooth_pairing_failed">Не удалось завершить сопряжение.</string>
     <string name="bluetooth_connect_failed">Не удалось установить BLE-соединение (код: %1$d).</string>
     <string name="bluetooth_services_failed">Ошибка обнаружения GATT-сервисов (код: %1$d).</string>
+    <string name="bluetooth_services_validation_failed">Ошибка валидации GATT-сервисов.</string>
     <string name="bluetooth_timeout">Время ожидания операции истекло.</string>
     <string name="bluetooth_unknown_error">Ошибка Bluetooth.</string>
+    <string name="rpc_error">Ошибка RPC.</string>
     <string name="permission_location_off">На Android 11 для BLE-поиска также должны быть включены службы геолокации.</string>
     <string name="retry">Повторить</string>
 </resources>
