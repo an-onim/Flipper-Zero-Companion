@@ -12,8 +12,7 @@ object SettingsStore {
 
     object Key {
         const val THEME_MODE = "theme_mode"
-        const val IS_DEVICE_CONNECTED = "is_device_flipper_connected"
-        const val RPC_SESSION_STATUS = "rpc_session_status"
+        const val LAST_DEVICE_ADDRESS = "last_connected_device_address"
     }
 
 }

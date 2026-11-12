@@ -24,21 +24,18 @@ import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresPermission
 import androidx.core.content.ContextCompat
-import androidx.datastore.preferences.core.booleanPreferencesKey
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dev.filpper.companion.data.Utils.toUInt
-import dev.filpper.companion.data.bluetooth.GattManager
 import dev.filpper.companion.data.bluetooth.FlipperGattUuid
 import dev.filpper.companion.data.bluetooth.FlipperGattUuid.getCharacteristicByUuid
+import dev.filpper.companion.data.bluetooth.GattManager
 import dev.filpper.companion.data.bluetooth.RpcStatus
 import dev.filpper.companion.domain.model.BleConnectionState
 import dev.filpper.companion.domain.model.BleDevice
 import dev.filpper.companion.domain.model.BleFailure
 import dev.filpper.companion.domain.repository.BleConnectionRepository
 import dev.filpper.companion.domain.store.SettingsStore
-import dev.filpper.companion.domain.store.SettingsStore.settingsStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -70,12 +67,10 @@ class BleConnectionRepositoryImpl @Inject constructor(
     private val _discoveredDevices = MutableStateFlow<List<BleDevice>>(emptyList())
     override val discoveredDevices = _discoveredDevices.asStateFlow()
 
-    private val isDeviceConnectedKey = booleanPreferencesKey(SettingsStore.Key.IS_DEVICE_CONNECTED)
+    private val lastDeviceAddress = stringPreferencesKey(SettingsStore.Key.LAST_DEVICE_ADDRESS)
     private val _connection = MutableStateFlow<BleConnectionState>(BleConnectionState.Disconnected)
     override val connection = _connection.asStateFlow()
 
-
-    private val rpcStatusKey = intPreferencesKey(SettingsStore.Key.RPC_SESSION_STATUS)
     private val _rpcStatus = MutableStateFlow(RpcStatus.NOT_ACTIVE)
     override val rpcStatus = _rpcStatus.asStateFlow()
     // TODO(rcp) if status=0 forbid new rpc-commands, to unready state; 1 - make session active
@@ -234,18 +229,12 @@ class BleConnectionRepositoryImpl @Inject constructor(
 
     fun saveRpcState(value: RpcStatus) {
         Log.v("OPOPO", "BleConnectionRepo -> saveRpcState $value")
-        scope.launch {
-            _rpcStatus.value = value
-            context.settingsStore.edit { preferences -> preferences[rpcStatusKey] = value.code.toInt() }
-        }
+        _rpcStatus.value = value
     }
 
     override fun saveConnectionState(value: BleConnectionState) {
         Log.v("OPOPO", "BleConnectionRepo -> saveConnectionState $value")
-        scope.launch {
-            _connection.value = value
-            context.settingsStore.edit { preferences -> preferences[isDeviceConnectedKey] = value is BleConnectionState.Connected }
-        }
+        _connection.value = value
     }
 
     private fun hasConnectPermission(): Boolean = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
@@ -312,6 +301,7 @@ class BleConnectionRepositoryImpl @Inject constructor(
         saveConnectionState(BleConnectionState.Connecting(device))
         try {
             val callback = object : BluetoothGattCallback() {
+
                 override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
                     if (!isCurrentGatt(gatt)) return
                     Log.v("OPOPO", "BleConnectionRepo -> onConnectionStateChange status=$status newState=$newState")
@@ -358,113 +348,51 @@ class BleConnectionRepositoryImpl @Inject constructor(
                     }
                 }
 
+                override fun onCharacteristicRead(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) =
+                    handleCharacteristicRead(gatt, characteristic, characteristic.value, status)
+
+                override fun onCharacteristicRead(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray, status: Int) =
+                    handleCharacteristicRead(gatt, characteristic, value, status)
+
+
+                override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) =
+                    handleCharacteristicChanged(gatt, characteristic, characteristic.value)
+
+                override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray) =
+                    handleCharacteristicChanged(gatt, characteristic, value)
+
                 override fun onDescriptorWrite(gatt: BluetoothGatt, descriptor: BluetoothGattDescriptor?, status: Int) {
                     if (!isCurrentGatt(gatt)) return
                     if (status != BluetoothGatt.GATT_SUCCESS) {
                         failGatt(gatt, BleFailure.EnableCCCDProblem)
                         return
                     }
+
                     Log.v("OPOPO", "BleConnectionRepo -> onDescriptorWrite descriptor ${descriptor?.uuid} char=${descriptor?.characteristic?.uuid?.getCharacteristicByUuid()}")
-                    when(descriptor?.characteristic?.uuid) {
-                        FlipperGattUuid.Characteristic.TX.uuid -> {
-                            // start enabling cccd for the next characteristic
-                            GattManager.processNextSubscription(gatt)?.let { error ->
-                                // if we have error as result - handle it
-                                failGatt(gatt, error)
-                            }
-                        }
-                        FlipperGattUuid.Characteristic.FLOW_CONTROL.uuid -> {
-                            // start enabling cccd for the next characteristic
-                            GattManager.processNextSubscription(gatt)?.let { error ->
-                                // if we have error as result - handle it
-                                failGatt(gatt, error)
-                            }
-                        }
-                        FlipperGattUuid.Characteristic.RPC_STATUS.uuid -> {
-                            onEnableAllCCCD(gatt, device)
-                        }
-                    }
-                }
 
-
-                override fun onCharacteristicRead(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
-                    if (!isCurrentGatt(gatt)) return
-                    if (status != BluetoothGatt.GATT_SUCCESS) {
-                        failGatt(gatt, BleFailure.RPCError)
-                        return
-                    }
-                    Log.v("OPOPO", "BleConnectionRepo -> onCharacteristicRead characteristic ${characteristic.uuid}")
-
-                    when(characteristic.uuid) {
-                        FlipperGattUuid.Characteristic.RPC_STATUS.uuid -> RpcStatus.fromBytes(characteristic.value).let {
-                            saveRpcState(it)
-                            if (it == RpcStatus.ACTIVE) {
-                                GattManager.readFlowControl(gatt).let{ result ->
-                                    if (!result) failGatt(gatt, BleFailure.RPCReadError("FlowControl"))
+                    if (descriptor?.uuid == FlipperGattUuid.BtSigConst.CCCD) {
+                        when(descriptor.characteristic?.uuid) {
+                            FlipperGattUuid.Characteristic.TX.uuid -> {
+                                // start enabling cccd for the next characteristic
+                                GattManager.processNextSubscription(gatt)?.let { error ->
+                                    // if we have error as result - handle it
+                                    failGatt(gatt, error)
                                 }
                             }
-                        }
-                        FlipperGattUuid.Characteristic.FLOW_CONTROL.uuid -> updateAvailableBytesBound(characteristic.value)
-                    }
-                }
-
-                override fun onCharacteristicRead(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray, status: Int) {
-                    if (!isCurrentGatt(gatt)) return
-                    if (status != BluetoothGatt.GATT_SUCCESS) {
-                        failGatt(gatt, BleFailure.RPCError)
-                        return
-                    }
-                    Log.v("OPOPO", "BleConnectionRepo -> onCharacteristicRead characteristic ${characteristic.uuid} value=${value.contentToString()}")
-
-                    when(characteristic.uuid) {
-                        FlipperGattUuid.Characteristic.RPC_STATUS.uuid -> RpcStatus.fromBytes(value).let {
-                            saveRpcState(it)
-                            if (it == RpcStatus.ACTIVE) {
-                                GattManager.readFlowControl(gatt).let{ result ->
-                                    if (!result) failGatt(gatt, BleFailure.RPCReadError("FlowControl"))
+                            FlipperGattUuid.Characteristic.FLOW_CONTROL.uuid -> {
+                                // start enabling cccd for the next characteristic
+                                GattManager.processNextSubscription(gatt)?.let { error ->
+                                    // if we have error as result - handle it
+                                    failGatt(gatt, error)
                                 }
                             }
-                        }
-                        FlipperGattUuid.Characteristic.FLOW_CONTROL.uuid -> updateAvailableBytesBound(value)
-                    }
-                }
-
-
-                override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
-                    if (!isCurrentGatt(gatt)) return
-                    Log.v("OPOPO", "BleConnectionRepo -> onCharacteristicChanged characteristic ${characteristic.uuid}")
-
-                    when(characteristic.uuid) {
-                        FlipperGattUuid.Characteristic.TX.uuid -> handleIncoming(characteristic.value)
-                        FlipperGattUuid.Characteristic.RPC_STATUS.uuid -> RpcStatus.fromBytes(characteristic.value).let {
-                            saveRpcState(it)
-                            if (it == RpcStatus.ACTIVE) {
-                                GattManager.readFlowControl(gatt).let{ result ->
-                                    if (!result) failGatt(gatt, BleFailure.RPCReadError("FlowControl"))
-                                }
+                            FlipperGattUuid.Characteristic.RPC_STATUS.uuid -> {
+                                onEnableAllCCCD(gatt, device)
                             }
                         }
-                        FlipperGattUuid.Characteristic.FLOW_CONTROL.uuid -> updateAvailableBytesBound(characteristic.value)
                     }
                 }
 
-                override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray) {
-                    if (!isCurrentGatt(gatt)) return
-                    Log.v("OPOPO", "BleConnectionRepo -> onCharacteristicChanged characteristic ${characteristic.uuid} value=${value.contentToString()}")
-
-                    when(characteristic.uuid) {
-                        FlipperGattUuid.Characteristic.TX.uuid -> handleIncoming(value)
-                        FlipperGattUuid.Characteristic.RPC_STATUS.uuid -> RpcStatus.fromBytes(value).let {
-                            saveRpcState(it)
-                            if (it == RpcStatus.ACTIVE) {
-                                GattManager.readFlowControl(gatt).let{ result ->
-                                    if (!result) failGatt(gatt, BleFailure.RPCReadError("FlowControl"))
-                                }
-                            }
-                        }
-                        FlipperGattUuid.Characteristic.FLOW_CONTROL.uuid -> updateAvailableBytesBound(value)
-                    }
-                }
             }
 
             val gatt = remote.connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE)
@@ -483,6 +411,45 @@ class BleConnectionRepositoryImpl @Inject constructor(
             fail(BleFailure.PermissionMissing)
         } catch (_: IllegalStateException) {
             fail(BleFailure.ConnectionFailed(-1))
+        }
+    }
+
+    private fun handleCharacteristicRead(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray, status: Int) {
+        if (!isCurrentGatt(gatt)) return
+        if (status != BluetoothGatt.GATT_SUCCESS) {
+            failGatt(gatt, BleFailure.RPCError)
+            return
+        }
+        Log.v("OPOPO", "BleConnectionRepo -> onCharacteristicRead characteristic ${characteristic.uuid} value=${value.contentToString()}")
+
+        when(characteristic.uuid) {
+            FlipperGattUuid.Characteristic.RPC_STATUS.uuid -> RpcStatus.fromBytes(value)?.let {
+                saveRpcState(it)
+                if (it == RpcStatus.ACTIVE) {
+                    GattManager.readFlowControl(gatt).let{ result ->
+                        if (!result) failGatt(gatt, BleFailure.RPCReadError("FlowControl"))
+                    }
+                }
+            } ?: Log.e("OPOPO", "Cannot get RPC status from ${value.contentToString()}")
+            FlipperGattUuid.Characteristic.FLOW_CONTROL.uuid -> updateAvailableBytesBound(value)
+        }
+    }
+
+    private fun handleCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray) {
+        if (!isCurrentGatt(gatt)) return
+        Log.v("OPOPO", "BleConnectionRepo -> onCharacteristicChanged characteristic ${characteristic.uuid} value=${value.contentToString()}")
+
+        when(characteristic.uuid) {
+            FlipperGattUuid.Characteristic.TX.uuid -> handleIncoming(value)
+            FlipperGattUuid.Characteristic.RPC_STATUS.uuid -> RpcStatus.fromBytes(value)?.let {
+                saveRpcState(it)
+                if (it == RpcStatus.ACTIVE) {
+                    GattManager.readFlowControl(gatt).let{ result ->
+                        if (!result) failGatt(gatt, BleFailure.RPCReadError("FlowControl"))
+                    }
+                }
+            } ?: Log.e("OPOPO", "Cannot get RPC status from ${value.contentToString()}")
+            FlipperGattUuid.Characteristic.FLOW_CONTROL.uuid -> updateAvailableBytesBound(value)
         }
     }
 

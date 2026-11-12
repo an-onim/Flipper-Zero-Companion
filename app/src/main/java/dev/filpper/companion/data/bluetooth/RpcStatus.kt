@@ -1,16 +1,14 @@
 package dev.filpper.companion.data.bluetooth
 
-import dev.filpper.companion.data.Utils.toUInt
-import java.nio.ByteOrder
-
 enum class RpcStatus(val code: UInt) {
     NOT_ACTIVE(0u),
     ACTIVE(1u),
     UNKNOWN(UInt.MAX_VALUE);
 
     companion object {
-        fun fromBytes(bytes: ByteArray): RpcStatus {
-            val code = bytes.toUInt(ByteOrder.LITTLE_ENDIAN)  // TODO(run) found UNKNOWN for bytearray [1, 20, 110, 11] - first only?
+        fun fromBytes(bytes: ByteArray): RpcStatus? {
+            val firstByte = bytes.firstOrNull() ?: return null
+            val code = firstByte.toUByte().toUInt()
             return entries.firstOrNull { it.code == code } ?: UNKNOWN
         }
 
