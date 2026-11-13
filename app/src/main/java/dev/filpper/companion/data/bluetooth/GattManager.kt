@@ -107,4 +107,8 @@ object GattManager {
             } ?: false
     }
 
+    fun resetSubscriptions() {
+        notifySubscriptionQueue.clear()
+    }
+
 }
