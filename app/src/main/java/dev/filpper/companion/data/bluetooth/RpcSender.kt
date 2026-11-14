@@ -6,9 +6,13 @@ import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothStatusCodes
 import android.os.Build
 import androidx.annotation.RequiresPermission
+import dev.filpper.companion.data.repository.BleConnectionRepositoryImpl.Companion.ATT_WRITE_OVERHEAD
+import dev.filpper.companion.data.repository.BleConnectionRepositoryImpl.Companion.FLIPPER_RX_MAX_SIZE
 import dev.filpper.companion.domain.model.BleConnectionState
 import dev.filpper.companion.domain.model.BleFailure
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
@@ -20,6 +24,7 @@ import kotlin.time.Duration.Companion.milliseconds
 
 internal class RpcSender(
     private val getGatt: () -> BluetoothGatt?,
+    private val getMtu: () -> Int,
     private val isBtConnected: StateFlow<BleConnectionState>,
     private val rpcSessionStatus: StateFlow<RpcStatus>,
     private val onWriteFail: (BluetoothGatt) -> Unit
@@ -29,23 +34,49 @@ internal class RpcSender(
     private val WRITE_TIMEOUT_MS = 10_000L        // TODO(refactor) move
 
     /**
-     * Waiting for activation of RPC-session
+     * Sends a full message (byte sequence) through RX
+     *
+     * * serializes concurrent sends with `Mutex`
+     * * splits data according to the current ATT MTU
+     * * waits for `onCharacteristicWrite()` after every chunk
+     *
+     * @return `null` if all GATT writes completed successfully
      */
-    private suspend fun awaitRpcActive(): BluetoothGatt? {
-        val result =
-            withTimeoutOrNull(RPC_INIT_TIMEOUT_MS.milliseconds) {
-                // to avoid case when connection is interrupted during timer work
-                combine(isBtConnected, rpcSessionStatus) { connection, status ->
-                    val connected = connection is BleConnectionState.Connected
-                    val active = status == RpcStatus.ACTIVE
-                    connected to active
-                }.first { (connected, active) -> !connected || active }
-            } ?: return null
+    suspend fun sendRxMessage(message: ByteArray): BleFailure? {
+        if (message.isEmpty()) return BleFailure.RPCError
+        val buffer = message.copyOf()
 
-        val (connected, active) = result
-        if (!connected || !active) return null
+        // TODO(transport): implement framing, fragmentation, Flow Control
 
-        return getGatt()
+        return writeRxMutex.withLock {
+            val gatt = awaitRpcActive() ?: return@withLock BleFailure.RPCError
+            var offset = 0
+
+            try {
+                while (offset < buffer.size) {
+                    currentCoroutineContext().ensureActive()
+
+                    val chunkSize = minOf(
+                        getMtu() - ATT_WRITE_OVERHEAD,
+                        FLIPPER_RX_MAX_SIZE,
+                        buffer.size - offset
+                    )
+                    val chunk = buffer.copyOfRange(offset, offset + chunkSize)
+
+                    val result = writeRxChunk(gatt, chunk)
+                    if (result != null) {
+                        if (offset > 0) onWriteFail(gatt)
+                        return@withLock result
+                    }
+
+                    offset += chunkSize
+                }
+                null
+            } catch (e: CancellationException) {
+                if (offset > 0) onWriteFail(gatt)
+                throw e
+            }
+        }
     }
 
 
@@ -69,20 +100,6 @@ internal class RpcSender(
         data class Failure(val status: Int) : WriteResult
     }
 
-    fun onGattClosed(gatt: BluetoothGatt) {
-        val pending = pendingRxWrite ?: return
-        if (pending.gatt != gatt) return
-
-        pending.completion.complete(WriteResult.Disconnected)
-    }
-
-    fun onRpcInactive(gatt: BluetoothGatt) {
-        val pending = pendingRxWrite ?: return
-        if (pending.gatt != gatt) return
-
-        pending.completion.complete(WriteResult.SessionInactive)
-    }
-
     fun handleCharacteristicWrite(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
         if (characteristic.uuid != FlipperGattUuid.Characteristic.RX.uuid) return
         val pending = pendingRxWrite ?: return
@@ -97,16 +114,27 @@ internal class RpcSender(
         pending.completion.complete(result)
     }
 
+    fun onGattClosed(gatt: BluetoothGatt) {
+        val pending = pendingRxWrite ?: return
+        if (pending.gatt != gatt) return
+
+        pending.completion.complete(WriteResult.Disconnected)
+    }
+
+    fun onRpcInactive(gatt: BluetoothGatt) {
+        val pending = pendingRxWrite ?: return
+        if (pending.gatt != gatt) return
+
+        pending.completion.complete(WriteResult.SessionInactive)
+    }
+
+
     /**
      * Executes one GATT-record and waiting for onCharacteristicWrite()
      */
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
-    internal suspend fun writeRxChunk(gatt: BluetoothGatt, bytes: ByteArray): BleFailure? = writeRxMutex.withLock {
-        if (!isConnectionValid(gatt)) return@withLock BleFailure.RPCError
-
-        // TODO(ble): change to real MTU
-        // using ATT MTU = 23
-        if (bytes.isEmpty() || bytes.size > 20) return@withLock BleFailure.RPCError
+    private suspend fun writeRxChunk(gatt: BluetoothGatt, bytes: ByteArray): BleFailure? {
+        if (!isConnectionValid(gatt)) return BleFailure.RPCError
 
         val rxChar = gatt.getService(FlipperGattUuid.SERVICE).getCharacteristic(FlipperGattUuid.Characteristic.RX.uuid)
 
@@ -127,12 +155,13 @@ internal class RpcSender(
                 false
             }
 
-            if (!writeStarted) return@withLock BleFailure.RPCError
+            // failed initiation may indicate an unavailable or busy GATT session
+            if (!writeStarted) return BleFailure.RPCError
 
             val result = withTimeoutOrNull(WRITE_TIMEOUT_MS.milliseconds) {
                 pending.completion.await()
             }
-            when(result) {
+            return when(result) {
                 WriteResult.Success -> if (isConnectionValid(gatt)) null else BleFailure.RPCError
                 WriteResult.Disconnected -> BleFailure.RPCError
                 is WriteResult.Failure,
@@ -148,8 +177,6 @@ internal class RpcSender(
         } finally {
             pendingRxWrite = null
         }
-
-
     }
 
     private fun isConnectionValid(gatt: BluetoothGatt) =
@@ -157,21 +184,23 @@ internal class RpcSender(
 
 
     /**
-     * Send full RPC message
+     * Waiting for activation of RPC-session
      */
-    suspend fun sendRpcCommand(command: ByteArray): BleFailure? {
-        // 1. check connection
-        // 2. waiting for RpcStatus.ACTIVE
-        val gatt = awaitRpcActive() ?: return BleFailure.RPCError
+    private suspend fun awaitRpcActive(): BluetoothGatt? {
+        val result =
+            withTimeoutOrNull(RPC_INIT_TIMEOUT_MS.milliseconds) {
+                // to avoid case when connection is interrupted during timer work
+                combine(isBtConnected, rpcSessionStatus) { connection, status ->
+                    val connected = connection is BleConnectionState.Connected
+                    val active = status == RpcStatus.ACTIVE
+                    connected to active
+                }.first { (connected, active) -> !connected || active }
+            } ?: return null
 
-        // 3. framing → фрагментация → Flow Control
-        // TODO(transport): implement framing, fragmentation, Flow Control
+        val (connected, active) = result
+        if (!connected || !active) return null
 
-        // 4. write RX with writeRxChunk
-
-        // 5. check result - see onCharacteristicWrite()
-
-        return null
+        return getGatt()
     }
 
 }

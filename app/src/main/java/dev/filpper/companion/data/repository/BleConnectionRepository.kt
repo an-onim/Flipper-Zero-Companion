@@ -103,6 +103,7 @@ class BleConnectionRepositoryImpl @Inject constructor(
 
     private val flipperSender = RpcSender(
         getGatt = { currentGatt },
+        getMtu = { currentAttMtu },
         isBtConnected = connection,
         rpcSessionStatus = rpcStatus,
         onWriteFail = { gatt -> failGatt(gatt, BleFailure.RPCError) }
@@ -111,6 +112,7 @@ class BleConnectionRepositoryImpl @Inject constructor(
     // TODO(transport): move credit accounting to FlipperBleTransport.
     private var maxAvailableBytesToSend: UInt = 0u
     private var availableBytesToSend: UInt = 0u
+    private var currentAttMtu = DEFAULT_ATT_MTU
 
 
     // ---------- Public API ---------- //
@@ -298,6 +300,15 @@ class BleConnectionRepositoryImpl @Inject constructor(
             flipperSender.handleCharacteristicWrite(gatt, characteristic, status)
         }
 
+
+        override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
+            if (!isCurrentGatt(gatt)) return
+
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                currentAttMtu = mtu
+                Log.d(TAG, "ATT MTU changed, new value: $mtu")
+            }
+        }
     }
 
     // ---------- GATT initialization ---------- //
@@ -414,6 +425,7 @@ class BleConnectionRepositoryImpl @Inject constructor(
 
         saveRpcState(RpcStatus.NOT_ACTIVE)
         maxAvailableBytesToSend = 0u
+        currentAttMtu = DEFAULT_ATT_MTU
 
         GattManager.resetSubscriptions()
 
@@ -442,8 +454,15 @@ class BleConnectionRepositoryImpl @Inject constructor(
         saveConnectionState(BleConnectionState.Failed(reason))
     }
 
-    private companion object {
-        const val TAG = "BleConnectionRepository"
-        const val CONNECTION_TIMEOUT_MS = 25_000L
+    companion object {
+        private const val TAG = "BleConnectionRepository"
+        private const val CONNECTION_TIMEOUT_MS = 25_000L
+        const val DEFAULT_ATT_MTU = 23
+        const val ATT_WRITE_OVERHEAD = 3
+
+        // see https://github.com/flipperdevices/flipperzero-firmware/blob/dev/targets/f7/ble_glue/services/serial_service.h
+        // BLE_SVC_SERIAL_DATA_LEN_MAX and BLE_SVC_SERIAL_CHAR_VALUE_LEN_MAX
+        const val FLIPPER_RX_MAX_SIZE = 486
+        const val FLIPPER_TX_MAX_SIZE = 243
     }
 }
