@@ -23,7 +23,7 @@ import kotlin.time.Duration.Companion.milliseconds
 
 internal class BleScanner(
     private val scope: CoroutineScope,
-    private val adapterProvider: () -> BluetoothAdapter?,
+    private val adapter: BluetoothAdapter?,
     private val hasConnectPermission: () -> Boolean,
     private val onFailure: (BleFailure) -> Unit,
 ) {
@@ -50,7 +50,7 @@ internal class BleScanner(
         stop()
         _discoveredDevices.value = emptyList()
 
-        val scanner = adapterProvider()?.bluetoothLeScanner ?: return BleFailure.BluetoothDisabled
+        val scanner = adapter?.bluetoothLeScanner ?: return BleFailure.BluetoothDisabled
 
         val callback = createScanCallback()
 

@@ -1,4 +1,4 @@
-package dev.filpper.companion.data
+package dev.filpper.companion.utils
 
 import java.nio.ByteBuffer
 import java.nio.ByteOrder

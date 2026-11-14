@@ -29,6 +29,6 @@ class FilesViewModel @Inject constructor(
         }
     }
 
-    // TODO(rpc): expose RefreshFiles intent once Storage.List is available.
+    // TODO(ui): rpc expose RefreshFiles intent once Storage.List is available.
     // TODO(files): implement file detail action only when the required fields are defined.
 }

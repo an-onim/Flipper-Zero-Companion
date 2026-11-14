@@ -4,9 +4,9 @@ import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
-import dev.filpper.companion.data.repository.BleConnectionRepositoryImpl
 import dev.filpper.companion.data.mock.MockFlipperDeviceInfoRepository
 import dev.filpper.companion.data.mock.MockFlipperFileRepository
+import dev.filpper.companion.data.repository.BleConnectionRepositoryImpl
 import dev.filpper.companion.data.repository.ThemeRepositoryImpl
 import dev.filpper.companion.domain.repository.BleConnectionRepository
 import dev.filpper.companion.domain.repository.FlipperDeviceInfoRepository
@@ -17,15 +17,20 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class RepositoryModule {
-    @Binds @Singleton
+
+    @Binds
+    @Singleton
     abstract fun bindBleConnection(impl: BleConnectionRepositoryImpl): BleConnectionRepository
 
-    @Binds @Singleton
+    @Binds
+    @Singleton
     abstract fun bindDeviceInfo(impl: MockFlipperDeviceInfoRepository): FlipperDeviceInfoRepository
 
-    @Binds @Singleton
+    @Binds
+    @Singleton
     abstract fun bindFiles(impl: MockFlipperFileRepository): FlipperFileRepository
 
-    @Binds @Singleton
+    @Binds
+    @Singleton
     abstract fun bindTheme(impl: ThemeRepositoryImpl): ThemeRepository
 }
