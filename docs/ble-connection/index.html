@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Интерактивная блок-схема BLE-подключения и инициализации RPC в Flipper Zero Companion">
+  <title>BLE Connection & RPC Initialization · Flipper Zero Companion</title>
+  <link rel="stylesheet" href="./connection.css">
+  <script src="./connection.js" defer></script>
+</head>
+<body>
+  <div class="container">
+    <header class="topbar">
+      <a class="brand" href="../index.html"><span class="brand-mark">F</span><span>FLIPPER <span style="color:var(--orange)">/</span> COMPANION</span></a>
+      <nav class="toplinks" aria-label="Навигация по документации"><a href="../index.html">Все материалы</a><a href="../ble-transport/simulator.html">RX Simulator ↗</a></nav>
+    </header>
+    <main>
+      <div class="hero">
+        <div>
+          <div class="eyebrow">BLE CONNECTION · RPC INITIALIZATION</div>
+          <h1>Подключение к Flipper Zero <span>от scan до RPC</span></h1>
+          <p class="lead">Интерактивная блок-схема подключения Android-приложения: системное сопряжение, GATT-профиль, CCCD и проверка готовности RPC. Нажми на любой блок, чтобы раскрыть последовательность вызовов и обработку ошибок.</p>
+          <div class="hero-meta"><span class="meta-pill">Android · Kotlin</span><span class="meta-pill">BLE Serial Service</span><span class="meta-pill">GATT + RPC</span></div>
+        </div>
+        <aside class="hero-aside" aria-label="Ключевое различие состояний">
+          <span class="small-title">ДВА УРОВНЯ ГОТОВНОСТИ</span>
+          <div class="state-card"><strong>GATT Connected</strong><small>Профиль проверен, CCCD настроены, можно получать уведомления.</small></div>
+          <div class="state-card ready"><strong>RPC Active</strong><small>RPC_STATUS = ACTIVE; отправка дополнительно учитывает FLOW_CONTROL.</small></div>
+          <p>Состояние подключения и активность RPC хранятся отдельно. Они не взаимозаменяемы.</p>
+        </aside>
+      </div>
+      <div class="toolbar">
+        <div><h2>Алгоритм подключения</h2><p>Основная последовательность и раскрывающиеся схемы внутри каждого блока. <span id="open-count" aria-live="polite">0 из 8 раскрыто</span>.</p></div>
+        <div class="toolbar-actions"><button id="expand-all" class="btn primary" type="button">Раскрыть всё</button><button id="collapse-all" class="btn" type="button">Свернуть всё</button></div>
+      </div>
+      <div class="pipeline" aria-label="Блок-схема BLE-подключения">
+        <section class="stage" id="discovery">
+  <button class="stage-header" type="button" aria-expanded="false" aria-controls="detail-discovery">
+    <span class="number">01</span>
+    <span class="stage-title"><span class="method">BleScanner.start()</span><span class="name">Поиск устройства</span><span class="summary">BLE scan → ScanCallback → выбор Flipper</span></span>
+    <span class="arrow-control">Подробности <span class="chevron" aria-hidden="true">⌄</span></span>
+  </button>
+  <div class="detail" id="detail-discovery" hidden>
+    <div class="detail-top"><div><h3>Поиск устройства</h3><p class="desc">Находим устройство и получаем его Bluetooth-адрес.</p></div><button class="collapse" type="button" aria-label="Свернуть Поиск устройства">Свернуть ↑</button></div>
+    <div class="mini-flow" aria-label="Последовательность операций"><div class="mini-node regular"><strong>startScan()</strong><small>Проверка доступности и разрешений</small></div><span class="mini-arrow" aria-hidden="true">→</span><div class="mini-node regular"><strong>onScanResult()</strong><small>Имя, адрес и RSSI</small></div><span class="mini-arrow" aria-hidden="true">→</span><div class="mini-node success"><strong>BleDevice</strong><small>Пользователь выбирает устройство</small></div></div>
+    <div class="detail-foot"><div class="detail-box"><h4>Привязка к коду</h4><p>BleConnectionRepository.startScan() → BleScanner.start(); stopScan() отменяет таймаут и сканирование.</p></div><div class="detail-box error"><h4>Ошибки и остановка</h4><p>BLUETOOTH_SCAN / BLUETOOTH_CONNECT, отключённый Bluetooth, неуспешный scan, системные службы геолокации на Android 11 и ниже.</p></div></div>
+    <p class="detail-note">Поиск не фильтруется только по стандартному имени Flipper: устройство может быть переименовано.</p>
+  </div>
+</section><section class="stage" id="pairing">
+  <button class="stage-header" type="button" aria-expanded="false" aria-controls="detail-pairing">
+    <span class="number">02</span>
+    <span class="stage-title"><span class="method">BlePairingManager.connect()</span><span class="name">Сопряжение</span><span class="summary">Уже bonded? Пропустить pairing. Иначе createBond()</span></span>
+    <span class="arrow-control">Подробности <span class="chevron" aria-hidden="true">⌄</span></span>
+  </button>
+  <div class="detail" id="detail-pairing" hidden>
+    <div class="detail-top"><div><h3>Сопряжение</h3><p class="desc">Проверяем системную пару и при необходимости ждём bonding.</p></div><button class="collapse" type="button" aria-label="Свернуть Сопряжение">Свернуть ↑</button></div>
+    <div class="mini-flow" aria-label="Последовательность операций"><div class="mini-node decision"><strong>BOND_BONDED?</strong><small>Проверка bondState</small></div><span class="mini-arrow" aria-hidden="true">→</span><div class="mini-node regular"><strong>createBond()</strong><small>Если устройство ещё не сопряжено</small></div><span class="mini-arrow" aria-hidden="true">→</span><div class="mini-node success"><strong>ACTION_BOND_STATE_CHANGED</strong><small>Подтверждён BOND_BONDED</small></div></div>
+    <div class="detail-foot"><div class="detail-box"><h4>Привязка к коду</h4><p>BlePairingManager → onPairingStarted() → onSuccessBonding(remote, device) → startGattConnection().</p></div><div class="detail-box error"><h4>Ошибки и остановка</h4><p>Отказ пользователя, BOND_NONE, потеря BLUETOOTH_CONNECT или таймаут ожидания 45 секунд → PairingFailed / TimedOut.</p></div></div>
+    <p class="detail-note">Для уже сопряжённого устройства createBond() не требуется. Отмена ожидания не обязательно останавливает системную процедуру bonding.</p>
+  </div>
+</section><section class="stage" id="gatt">
+  <button class="stage-header" type="button" aria-expanded="false" aria-controls="detail-gatt">
+    <span class="number">03</span>
+    <span class="stage-title"><span class="method">startGattConnection()</span><span class="name">GATT-соединение</span><span class="summary">connectGatt() → onConnectionStateChange(STATE_CONNECTED)</span></span>
+    <span class="arrow-control">Подробности <span class="chevron" aria-hidden="true">⌄</span></span>
+  </button>
+  <div class="detail" id="detail-gatt" hidden>
+    <div class="detail-top"><div><h3>GATT-соединение</h3><p class="desc">Создаём BluetoothGatt и устанавливаем LE-соединение.</p></div><button class="collapse" type="button" aria-label="Свернуть GATT-соединение">Свернуть ↑</button></div>
+    <div class="mini-flow" aria-label="Последовательность операций"><div class="mini-node regular"><strong>connectGatt()</strong><small>TRANSPORT_LE, mainHandler</small></div><span class="mini-arrow" aria-hidden="true">→</span><div class="mini-node decision"><strong>onConnectionStateChange()</strong><small>status == GATT_SUCCESS?</small></div><span class="mini-arrow" aria-hidden="true">→</span><div class="mini-node success"><strong>STATE_CONNECTED</strong><small>Запустить discovery</small></div></div>
+    <div class="detail-foot"><div class="detail-box"><h4>Привязка к коду</h4><p>BleConnectionRepositoryImpl.startGattConnection(); currentGatt хранится на время активной сессии.</p></div><div class="detail-box error"><h4>Ошибки и остановка</h4><p>GATT error, disconnect либо таймаут подключения (25 секунд) → failGatt(), закрытие текущей GATT-сессии.</p></div></div>
+    <p class="detail-note">Callback старого соединения игнорируется через проверку isCurrentGatt(gatt).</p>
+  </div>
+</section><section class="stage" id="services">
+  <button class="stage-header" type="button" aria-expanded="false" aria-controls="detail-services">
+    <span class="number">04</span>
+    <span class="stage-title"><span class="method">GattManager.validateGattConnection()</span><span class="name">Обнаружение сервисов</span><span class="summary">discoverServices() → onServicesDiscovered() → проверка профиля</span></span>
+    <span class="arrow-control">Подробности <span class="chevron" aria-hidden="true">⌄</span></span>
+  </button>
+  <div class="detail" id="detail-services" hidden>
+    <div class="detail-top"><div><h3>Обнаружение сервисов</h3><p class="desc">Убеждаемся, что Flipper предоставляет нужный Serial Service.</p></div><button class="collapse" type="button" aria-label="Свернуть Обнаружение сервисов">Свернуть ↑</button></div>
+    <div class="mini-flow" aria-label="Последовательность операций"><div class="mini-node regular"><strong>discoverServices()</strong><small>Асинхронный поиск GATT-сервисов</small></div><span class="mini-arrow" aria-hidden="true">→</span><div class="mini-node decision"><strong>onServicesDiscovered()</strong><small>status == GATT_SUCCESS?</small></div><span class="mini-arrow" aria-hidden="true">→</span><div class="mini-node success"><strong>validateGattConnection()</strong><small>Service, четыре характеристики, CCCD</small></div></div>
+    <div class="detail-foot"><div class="detail-box"><h4>Привязка к коду</h4><p>FlipperGattUuid.SERVICE; RX, TX, FLOW_CONTROL, RPC_STATUS; CCCD для трёх характеристик.</p></div><div class="detail-box error"><h4>Ошибки и остановка</h4><p>Ошибка discoverServices или отсутствие требуемых характеристик/CCCD → ServiceDiscoveryFailed / InvalidGattProfile.</p></div></div>
+    <p class="detail-note">Наличие GATT-соединения ещё не означает, что Serial Service проверен или уведомления настроены.</p>
+  </div>
+</section><section class="stage" id="subscriptions">
+  <button class="stage-header" type="button" aria-expanded="false" aria-controls="detail-subscriptions">
+    <span class="number">05</span>
+    <span class="stage-title"><span class="method">GattManager.processNextSubscription()</span><span class="name">Подписка на характеристики</span><span class="summary">TX indication → FLOW_CONTROL notify → RPC_STATUS notify</span></span>
+    <span class="arrow-control">Подробности <span class="chevron" aria-hidden="true">⌄</span></span>
+  </button>
+  <div class="detail" id="detail-subscriptions" hidden>
+    <div class="detail-top"><div><h3>Подписка на характеристики</h3><p class="desc">Записываем CCCD строго последовательно, дожидаясь callback.</p></div><button class="collapse" type="button" aria-label="Свернуть Подписка на характеристики">Свернуть ↑</button></div>
+    <div class="mini-flow" aria-label="Последовательность операций"><div class="mini-node regular"><strong>TX · CCCD</strong><small>ENABLE_INDICATION_VALUE</small></div><span class="mini-arrow" aria-hidden="true">→</span><div class="mini-node regular"><strong>FLOW_CONTROL · CCCD</strong><small>ENABLE_NOTIFICATION_VALUE</small></div><span class="mini-arrow" aria-hidden="true">→</span><div class="mini-node success"><strong>RPC_STATUS · CCCD</strong><small>ENABLE_NOTIFICATION_VALUE</small></div></div>
+    <div class="detail-foot"><div class="detail-box"><h4>Привязка к коду</h4><p>initSubscribingQueue() → processNextSubscription() → onDescriptorWrite(SUCCESS) → следующая характеристика.</p></div><div class="detail-box error"><h4>Ошибки и остановка</h4><p>Не удалось настроить локальные notifications / записать CCCD → EnableCCCDProblem.</p></div></div>
+    <p class="detail-note">После третьего успешного onDescriptorWrite() устанавливается BleConnectionState.Connected. Это готовность GATT, но не обязательно активная RPC-сессия.</p>
+  </div>
+</section><section class="stage" id="rpc-status">
+  <button class="stage-header" type="button" aria-expanded="false" aria-controls="detail-rpc-status">
+    <span class="number">06</span>
+    <span class="stage-title"><span class="method">GattManager.readRpcStatus()</span><span class="name">Проверка RPC_STATUS</span><span class="summary">readCharacteristic() → ACTIVE / NOT_ACTIVE</span></span>
+    <span class="arrow-control">Подробности <span class="chevron" aria-hidden="true">⌄</span></span>
+  </button>
+  <div class="detail" id="detail-rpc-status" hidden>
+    <div class="detail-top"><div><h3>Проверка RPC_STATUS</h3><p class="desc">Определяем, активен ли RPC на Flipper.</p></div><button class="collapse" type="button" aria-label="Свернуть Проверка RPC_STATUS">Свернуть ↑</button></div>
+    <div class="mini-flow" aria-label="Последовательность операций"><div class="mini-node regular"><strong>readRpcStatus()</strong><small>Чтение начального значения</small></div><span class="mini-arrow" aria-hidden="true">→</span><div class="mini-node decision"><strong>onCharacteristicRead()</strong><small>Декодирование RpcStatus</small></div><span class="mini-arrow" aria-hidden="true">→</span><div class="mini-node success"><strong>onCharacteristicChanged()</strong><small>Обновления ACTIVE / NOT_ACTIVE</small></div></div>
+    <div class="detail-foot"><div class="detail-box"><h4>Привязка к коду</h4><p>saveRpcState(RpcStatus.ACTIVE | NOT_ACTIVE); RpcSender.awaitRpcActive() ждёт разрешения на отправку.</p></div><div class="detail-box error"><h4>Ошибки и остановка</h4><p>Неудачное чтение → RPCReadError. Некорректный payload не должен автоматически трактоваться как ACTIVE.</p></div></div>
+    <p class="detail-note">NOT_ACTIVE не равно разрыву Bluetooth: GATT может оставаться Connected. Смена статуса поступает через notification.</p>
+  </div>
+</section><section class="stage" id="flow-control">
+  <button class="stage-header" type="button" aria-expanded="false" aria-controls="detail-flow-control">
+    <span class="number">07</span>
+    <span class="stage-title"><span class="method">GattManager.readFlowControl()</span><span class="name">Инициализация FLOW_CONTROL</span><span class="summary">Чтение UInt32 (big-endian) и последующие notify</span></span>
+    <span class="arrow-control">Подробности <span class="chevron" aria-hidden="true">⌄</span></span>
+  </button>
+  <div class="detail" id="detail-flow-control" hidden>
+    <div class="detail-top"><div><h3>Инициализация FLOW_CONTROL</h3><p class="desc">Получаем первоначальное окно отправки и обновления кредита.</p></div><button class="collapse" type="button" aria-label="Свернуть Инициализация FLOW_CONTROL">Свернуть ↑</button></div>
+    <div class="mini-flow" aria-label="Последовательность операций"><div class="mini-node regular"><strong>readFlowControl()</strong><small>После чтения RPC_STATUS</small></div><span class="mini-arrow" aria-hidden="true">→</span><div class="mini-node regular"><strong>onCharacteristicRead()</strong><small>4 байта · UInt32 · big-endian</small></div><span class="mini-arrow" aria-hidden="true">→</span><div class="mini-node success"><strong>onCharacteristicChanged()</strong><small>Новое окно → RpcSender</small></div></div>
+    <div class="detail-foot"><div class="detail-box"><h4>Привязка к коду</h4><p>updateAvailableBytesBound(gatt, value) → RpcSender.onFlowControlUpdate(gatt, available).</p></div><div class="detail-box error"><h4>Ошибки и остановка</h4><p>Ошибка чтения или неверный размер payload → RPCReadError; при нулевом кредите отправитель ожидает новое окно.</p></div></div>
+    <p class="detail-note">Начальное чтение выполняется независимо от ACTIVE / NOT_ACTIVE в выбранной упрощённой реализации. Уведомление задаёт новое окно, а не прибавку к нему.</p>
+  </div>
+</section><section class="stage" id="ready">
+  <button class="stage-header" type="button" aria-expanded="false" aria-controls="detail-ready">
+    <span class="number">08</span>
+    <span class="stage-title"><span class="method">RpcSender.send() / FlipperBleReceiver</span><span class="name">Передача данных</span><span class="summary">RPC ACTIVE + доступное окно → RX write / TX indication</span></span>
+    <span class="arrow-control">Подробности <span class="chevron" aria-hidden="true">⌄</span></span>
+  </button>
+  <div class="detail" id="detail-ready" hidden>
+    <div class="detail-top"><div><h3>Передача данных</h3><p class="desc">После проверки условий можно обмениваться байтами.</p></div><button class="collapse" type="button" aria-label="Свернуть Передача данных">Свернуть ↑</button></div>
+    <div class="mini-flow" aria-label="Последовательность операций"><div class="mini-node decision"><strong>awaitRpcActive()</strong><small>Сессия должна быть ACTIVE</small></div><span class="mini-arrow" aria-hidden="true">→</span><div class="mini-node regular"><strong>send(bytes)</strong><small>MTU · RX ≤ 486 · credit · Mutex</small></div><span class="mini-arrow" aria-hidden="true">→</span><div class="mini-node success"><strong>onCharacteristicWrite()</strong><small>Подтверждение RX; TX → receiver</small></div></div>
+    <div class="detail-foot"><div class="detail-box"><h4>Привязка к коду</h4><p>RpcSender.send() → writeRxChunkLocked() → onCharacteristicWrite(); TX → onCharacteristicChanged() → FlipperBleReceiver.</p></div><div class="detail-box error"><h4>Ошибки и остановка</h4><p>Disconnect, NOT_ACTIVE, ошибка записи, таймаут или переполнение буфера приёма → прекращение отправки / сброс текущей передачи.</p></div></div>
+    <p class="detail-note">Это логическое условие готовности, а не новый публичный BleConnectionState. Готовность RPC нельзя определять только по Connected.</p>
+  </div>
+</section>
+      </div>
+      <section class="error-section" aria-label="Завершение соединения">
+        <div><h2>Отключение и восстановление</h2><p>При disconnect или критической ошибке текущий GATT закрывается, значения <code>RPC_STATUS</code> и кредита отправки сбрасываются, поздние callback'и старой сессии игнорируются. Для нового подключения запускается новая последовательность.</p></div>
+        <div class="error-sign">DISCONNECTED / FAILED</div>
+      </section>
+      <section class="sources" aria-label="Исходные материалы"><h2>Исходные материалы</h2>
+        <a href="https://developer.android.com/develop/connectivity/bluetooth/ble/transfer-ble-data" target="_blank" rel="noopener noreferrer">Android · BLE data transfer ↗</a>
+        <a href="https://developer.android.com/reference/android/bluetooth/BluetoothGattCallback" target="_blank" rel="noopener noreferrer">Android · GATT callbacks ↗</a>
+        <a href="https://github.com/flipperdevices/flipperzero-firmware/blob/dev/targets/f7/ble_glue/services/serial_service.c" target="_blank" rel="noopener noreferrer">Flipper · Serial Service ↗</a>
+      </section>
+    </main>
+    <footer class="footer"><span>FLIPPER ZERO COMPANION · BLE DOCUMENTATION</span><span>Техническая блок-схема · без подключения к устройству</span></footer>
+  </div>
+</body>
+</html>

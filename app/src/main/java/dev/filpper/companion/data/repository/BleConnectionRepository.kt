@@ -15,13 +15,13 @@ import android.os.Looper
 import android.util.Log
 import androidx.annotation.RequiresPermission
 import dagger.hilt.android.qualifiers.ApplicationContext
-import dev.filpper.companion.utils.Utils.toUInt
+import dev.filpper.companion.utils.Utils.toInt
 import dev.filpper.companion.data.bluetooth.BlePairingManager
 import dev.filpper.companion.data.bluetooth.BleScanner
 import dev.filpper.companion.data.bluetooth.FlipperBleReceiver
 import dev.filpper.companion.data.bluetooth.FlipperGattUuid
 import dev.filpper.companion.data.bluetooth.GattManager
-import dev.filpper.companion.data.bluetooth.RpcSender
+import dev.filpper.companion.data.bluetooth.FlipperBleSender
 import dev.filpper.companion.data.bluetooth.RpcStatus
 import dev.filpper.companion.domain.model.BleConnectionState
 import dev.filpper.companion.domain.model.BleDevice
@@ -101,18 +101,12 @@ class BleConnectionRepositoryImpl @Inject constructor(
 
     private val flipperReceiver = FlipperBleReceiver()
 
-    private val flipperSender = RpcSender(
+    private val flipperSender = FlipperBleSender(
         getGatt = { currentGatt },
-        getMtu = { currentAttMtu },
         isBtConnected = connection,
         rpcSessionStatus = rpcStatus,
         onWriteFail = { gatt -> failGatt(gatt, BleFailure.RPCError) }
     )
-
-    // TODO(transport): move credit accounting to FlipperBleTransport.
-    private var maxAvailableBytesToSend: UInt = 0u
-    private var availableBytesToSend: UInt = 0u
-    private var currentAttMtu = DEFAULT_ATT_MTU
 
 
     // ---------- Public API ---------- //
@@ -175,7 +169,7 @@ class BleConnectionRepositoryImpl @Inject constructor(
 
         if (value != RpcStatus.ACTIVE) {
             currentGatt?.let(flipperSender::onRpcInactive)
-            maxAvailableBytesToSend = 0u
+            flipperSender.setAvailableBytes(0)
         }
     }
 
@@ -305,7 +299,7 @@ class BleConnectionRepositoryImpl @Inject constructor(
             if (!isCurrentGatt(gatt)) return
 
             if (status == BluetoothGatt.GATT_SUCCESS) {
-                currentAttMtu = mtu
+                flipperSender.setAttMtu(mtu)
                 Log.d(TAG, "ATT MTU changed, new value: $mtu")
             }
         }
@@ -391,9 +385,8 @@ class BleConnectionRepositoryImpl @Inject constructor(
     private fun handleFlowControlValue(value: ByteArray) {
         if (_rpcStatus.value != RpcStatus.ACTIVE) return
 
-        maxAvailableBytesToSend = value.toUInt(ByteOrder.BIG_ENDIAN) ?: 0u
-
-        Log.d(TAG, "FLOW_CONTROL: $maxAvailableBytesToSend bytes")
+        flipperSender.setAvailableBytes(value.toInt(ByteOrder.BIG_ENDIAN) ?: 0)
+        Log.d(TAG, "FLOW_CONTROL: ${value.toInt(ByteOrder.BIG_ENDIAN) ?: 0} bytes")
 
         // TODO(transport): notify sender and update
         // the active transmission credit window.
@@ -424,8 +417,8 @@ class BleConnectionRepositoryImpl @Inject constructor(
         gatt?.let(flipperSender::onGattClosed)
 
         saveRpcState(RpcStatus.NOT_ACTIVE)
-        maxAvailableBytesToSend = 0u
-        currentAttMtu = DEFAULT_ATT_MTU
+        flipperSender.setAvailableBytes(0)
+        flipperSender.setAttMtu(DEFAULT_ATT_MTU)
 
         GattManager.resetSubscriptions()
 

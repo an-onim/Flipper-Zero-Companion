@@ -5,14 +5,17 @@ import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothStatusCodes
 import android.os.Build
+import android.util.Log
 import androidx.annotation.RequiresPermission
 import dev.filpper.companion.data.repository.BleConnectionRepositoryImpl.Companion.ATT_WRITE_OVERHEAD
+import dev.filpper.companion.data.repository.BleConnectionRepositoryImpl.Companion.DEFAULT_ATT_MTU
 import dev.filpper.companion.data.repository.BleConnectionRepositoryImpl.Companion.FLIPPER_RX_MAX_SIZE
 import dev.filpper.companion.domain.model.BleConnectionState
 import dev.filpper.companion.domain.model.BleFailure
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
@@ -22,16 +25,15 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration.Companion.milliseconds
 
-internal class RpcSender(
+internal class FlipperBleSender(
     private val getGatt: () -> BluetoothGatt?,
-    private val getMtu: () -> Int,
     private val isBtConnected: StateFlow<BleConnectionState>,
     private val rpcSessionStatus: StateFlow<RpcStatus>,
     private val onWriteFail: (BluetoothGatt) -> Unit
 ) {
 
-    private val RPC_INIT_TIMEOUT_MS = 5_000L      // TODO(refactor) move
-    private val WRITE_TIMEOUT_MS = 10_000L        // TODO(refactor) move
+    private var currentAttMtu = DEFAULT_ATT_MTU
+    private var availableBytesToSend = MutableStateFlow(0)  // depends on FLOW_CONTROL
 
     /**
      * Sends a full message (byte sequence) through RX
@@ -56,12 +58,19 @@ internal class RpcSender(
                 while (offset < buffer.size) {
                     currentCoroutineContext().ensureActive()
 
+                    // wait for flow control credits
+                    val available = awaitAvailableBytes(gatt) ?: return@withLock BleFailure.RPCError
+
+                    // calculate chunk size
                     val chunkSize = minOf(
-                        getMtu() - ATT_WRITE_OVERHEAD,
+                        currentAttMtu - ATT_WRITE_OVERHEAD,
                         FLIPPER_RX_MAX_SIZE,
+                        available,
                         buffer.size - offset
                     )
+                    Log.v(TAG, "Calculated chunk size = $chunkSize")
                     val chunk = buffer.copyOfRange(offset, offset + chunkSize)
+                    availableBytesToSend.value = available - chunk.size // calculate free bytes
 
                     val result = writeRxChunk(gatt, chunk)
                     if (result != null) {
@@ -89,17 +98,6 @@ internal class RpcSender(
      */
     private var pendingRxWrite: PendingWrite? = null
 
-    private data class PendingWrite(
-        val gatt: BluetoothGatt,
-        val completion: CompletableDeferred<WriteResult>,
-    )
-    private sealed interface WriteResult {
-        data object Success : WriteResult
-        data object Disconnected : WriteResult
-        data object SessionInactive : WriteResult
-        data class Failure(val status: Int) : WriteResult
-    }
-
     fun handleCharacteristicWrite(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
         if (characteristic.uuid != FlipperGattUuid.Characteristic.RX.uuid) return
         val pending = pendingRxWrite ?: return
@@ -115,6 +113,8 @@ internal class RpcSender(
     }
 
     fun onGattClosed(gatt: BluetoothGatt) {
+        setAvailableBytes(0)
+
         val pending = pendingRxWrite ?: return
         if (pending.gatt != gatt) return
 
@@ -122,12 +122,25 @@ internal class RpcSender(
     }
 
     fun onRpcInactive(gatt: BluetoothGatt) {
+        setAvailableBytes(0)
+
         val pending = pendingRxWrite ?: return
         if (pending.gatt != gatt) return
 
         pending.completion.complete(WriteResult.SessionInactive)
     }
 
+
+    fun setAttMtu(value: Int) {
+        currentAttMtu = value
+    }
+
+    fun setAvailableBytes(value: Int) {
+        availableBytesToSend.value = value
+    }
+
+
+    // ---------- Private block ---------- //
 
     /**
      * Executes one GATT-record and waiting for onCharacteristicWrite()
@@ -179,8 +192,16 @@ internal class RpcSender(
         }
     }
 
-    private fun isConnectionValid(gatt: BluetoothGatt) =
-        getGatt() == gatt && isBtConnected.value is BleConnectionState.Connected && rpcSessionStatus.value == RpcStatus.ACTIVE
+    private data class PendingWrite(
+        val gatt: BluetoothGatt,
+        val completion: CompletableDeferred<WriteResult>,
+    )
+    private sealed interface WriteResult {
+        data object Success : WriteResult
+        data object Disconnected : WriteResult
+        data object SessionInactive : WriteResult
+        data class Failure(val status: Int) : WriteResult
+    }
 
 
     /**
@@ -201,6 +222,35 @@ internal class RpcSender(
         if (!connected || !active) return null
 
         return getGatt()
+    }
+
+    /**
+     * Waiting for available bytes to have opportunity to send/continue to send RX command
+     */
+    private suspend fun awaitAvailableBytes(gatt: BluetoothGatt): Int? = withTimeoutOrNull(FLOW_CONTROL_TIMEOUT_MS.milliseconds) {
+        combine(availableBytesToSend, isBtConnected, rpcSessionStatus) { credits, connection, rpcStatus ->
+            val ready = isConnectionValid(gatt)
+            credits to ready
+        }
+            // if the connection was lost or rpc became inactive -> stop it
+            .first { (credits, ready) -> credits > 0 || !ready || getGatt() !== gatt }
+            .let { (credits, ready) ->
+                // if there is no new data transition window -> null
+                // else -> value
+                credits.takeIf { it > 0 && ready && getGatt() === gatt }
+            }
+    }
+
+    private fun isConnectionValid(gatt: BluetoothGatt) =
+        getGatt() == gatt && isBtConnected.value is BleConnectionState.Connected && rpcSessionStatus.value == RpcStatus.ACTIVE
+
+
+    companion object {
+        private const val TAG = "RpcSender"
+
+        private const val RPC_INIT_TIMEOUT_MS = 5_000L
+        private const val WRITE_TIMEOUT_MS = 10_000L
+        private const val FLOW_CONTROL_TIMEOUT_MS = 30_000L
     }
 
 }

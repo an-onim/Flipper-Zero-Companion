@@ -40,7 +40,7 @@
     <string name="category_ibutton">iButton</string>
     <string name="category_badusb">BadUSB</string>
     <string name="category_other">Прочее</string>
-    <string name="permission_denied">Для поиска устройств необходимо разрешение Bluetooth (на Android 11 — геолокация).</string>
+    <string name="permission_denied">Для поиска устройств необходимо разрешение Bluetooth (на Android 11 - геолокация).</string>
     <string name="bluetooth_disabled">Bluetooth выключен. Включите его для поиска устройств.</string>
     <string name="bluetooth_enable_denied">Без включённого Bluetooth поиск невозможен.</string>
     <string name="bluetooth_not_supported">Bluetooth LE не поддерживается устройством.</string>

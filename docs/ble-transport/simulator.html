@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Интерактивная симуляция Android → Flipper Zero BLE RX: MTU, фрагментация, FLOW_CONTROL, onCharacteristicWrite и Mutex.">
+  <title>BLE RX Transport Simulator - Flipper Companion</title>
+  <link rel="stylesheet" href="./simulator.css">
+  <script src="./simulation.js" defer></script>
+  <script src="./simulator.js" defer></script>
+</head>
+<body>
+  <div class="page">
+    <header class="topbar">
+      <a class="brand" href="../index.html" aria-label="Вернуться к документации"><span class="brand-mark" aria-hidden="true">F<span class="brand-dot">.</span></span><span>FLIPPER <span class="sub-brand">COMPANION</span></span></a>
+      <span class="top-tag">BLE TRANSPORT <span class="divider-dot">/</span> DOCS LAB</span>
+    </header>
+    <main>
+      <section class="intro">
+        <div class="eyebrow"><span class="live-dot"></span> ИНТЕРАКТИВНАЯ ДОКУМЕНТАЦИЯ</div>
+        <h1>Android <span class="arrow">→</span> Flipper Zero<br><span class="accent">RX Transport Simulator</span></h1>
+        <p class="lead">Модель работы <code>RpcSender.send()</code>: деление сообщения по ATT MTU, учёт <code>FLOW_CONTROL</code>, ожидание <code>onCharacteristicWrite()</code> и последовательная отправка под <code>Mutex</code>.</p>
+        <div class="notice"><span class="notice-icon">i</span> Это детерминированная симуляция логики транспорта, а не реальное BLE-соединение. RPC-сессия считается активной, устройство - подключённым.</div>
+      </section>
+
+      <section class="flow-diagram" aria-label="Путь отправки пакета">
+        <div class="flow-node"><span class="node-step">01 / DATA</span><strong>send(bytes)</strong><small>ByteArray · Coroutine</small></div>
+        <span class="flow-arrow" aria-hidden="true">→</span>
+        <div class="flow-node"><span class="node-step">02 / TX PATH</span><strong>Mutex + MTU</strong><small>FLOW_CONTROL · Fragment</small></div>
+        <span class="flow-arrow" aria-hidden="true">→</span>
+        <div class="flow-node"><span class="node-step">03 / GATT</span><strong>RX write</strong><small>pendingWrite · callback</small></div>
+        <span class="flow-arrow" aria-hidden="true">→</span>
+        <div class="flow-node flipper-node"><span class="node-step">04 / DEVICE</span><strong>Flipper Zero</strong><small>Serial Service · RX</small></div>
+      </section>
+
+      <div class="dashboard">
+        <aside class="sidebar">
+          <section class="panel" aria-labelledby="config-title">
+            <div class="panel-heading"><div><p class="section-overline">КОНФИГУРАЦИЯ</p><h2 id="config-title">Параметры</h2></div><span class="panel-index">01</span></div>
+            <div class="control">
+              <label for="payloadSize">Размер сообщения <code>send(bytes)</code> <output id="payloadValue" for="payloadSize">600 Б</output></label>
+              <input type="range" id="payloadSize" min="20" max="1200" value="600" step="20">
+              <div class="range-labels"><span>20 Б</span><span>1200 Б</span></div>
+            </div>
+            <div class="control">
+              <label for="mtu">Согласованный ATT MTU</label>
+              <select id="mtu"><option value="23">23 байта</option><option value="100">100 байт</option><option value="247" selected>247 байт</option><option value="517">517 байт</option></select>
+            </div>
+            <div class="control">
+              <label for="initialCredit">Начальный <code>FLOW_CONTROL</code> <output id="creditValue" for="initialCredit">486 Б</output></label>
+              <input type="range" id="initialCredit" min="0" max="1024" value="486" step="1">
+              <div class="range-labels"><span>0 Б</span><span>1024 Б</span></div>
+            </div>
+            <div class="parameter-line"><span>Лимит RX-характеристики</span><strong><code>486 Б</code></strong></div>
+            <div class="parameter-line"><span><code>minOf(MTU - 3, 486)</code></span><strong id="chunkLimit">244 Б</strong></div>
+            <button type="button" class="btn btn-primary block" id="startBtn">Запустить send() <span aria-hidden="true">↗</span></button>
+            <button type="button" class="btn btn-secondary block" id="resetBtn">Сбросить симуляцию</button>
+          </section>
+          <section class="panel" aria-labelledby="formula-title">
+            <div class="panel-heading compact"><div><p class="section-overline">АЛГОРИТМ</p><h2 id="formula-title">Формула</h2></div><span class="panel-index">02</span></div>
+            <pre class="formula"><code>chunkSize = minOf(
+  getMtu() - 3,
+  FLIPPER_RX_MAX_SIZE,
+  availableBytesToSend,
+  payload.size - offset
+)</code></pre>
+            <p class="small-note">Разрешение резервируется <em>до</em> записи, а <code>offset</code> изменяется только после успешного GATT-callback.</p>
+          </section>
+        </aside>
+
+        <div class="content">
+          <section class="panel monitor" aria-labelledby="monitor-title">
+            <div class="panel-heading"><div><p class="section-overline">ТЕКУЩЕЕ СОСТОЯНИЕ</p><h2 id="monitor-title">Монитор отправки</h2></div><span class="panel-index">03</span></div>
+            <div class="statusline"><span id="statusIndicator" class="status-indicator idle"></span><strong id="statusLabel" aria-live="polite">Ожидание запуска</strong><span class="mono dim" id="activeMessage">send() ещё не запущен</span></div>
+            <div class="progress-title"><span>Подтверждено через <code>onCharacteristicWrite</code></span><strong id="progressText">0 / 600 Б</strong></div>
+            <div class="progress-track"><div class="progress-confirmed" id="progressConfirmed"></div><div class="progress-pending" id="progressPending"></div></div>
+            <div class="legend"><span><i class="legend-color confirmed"></i>Подтверждено</span><span><i class="legend-color pending"></i>Ожидает callback</span><span><i class="legend-color remaining"></i>Ожидает отправки</span></div>
+            <div class="metric-grid">
+              <div class="metric"><span class="metric-label">offset</span><div><strong id="offsetMetric">0</strong><small>байт</small></div><p>Уже подтверждено</p></div>
+              <div class="metric"><span class="metric-label">availableBytesToSend</span><div><strong id="creditMetric">0</strong><small>байт</small></div><p>Оставшееся разрешение</p></div>
+              <div class="metric"><span class="metric-label">pendingWrite</span><div><strong id="pendingMetric">0</strong><small>байт</small></div><p>Запись в процессе</p></div>
+              <div class="metric"><span class="metric-label">remaining</span><div><strong id="remainingMetric">600</strong><small>байт</small></div><p>Не отправлено</p></div>
+            </div>
+            <div class="action-card" id="actionCard" aria-live="polite">
+              <span class="action-label">СЛЕДУЮЩЕЕ ДЕЙСТВИЕ</span>
+              <h3 id="actionTitle">Запусти симуляцию</h3>
+              <p id="actionDescription">Параметры можно менять до начала отправки.</p>
+              <div class="primary-actions">
+                <button type="button" id="writeBtn" class="btn btn-primary" hidden>writeCharacteristic(RX)</button>
+                <button type="button" id="confirmBtn" class="btn btn-primary" hidden>onCharacteristicWrite(SUCCESS)</button>
+                <button type="button" id="autoBtn" class="btn btn-outline" hidden>До следующей паузы »</button>
+                <button type="button" id="errorBtn" class="btn btn-danger" hidden>Ошибка GATT</button>
+              </div>
+              <div class="fault-actions" id="faultActions" hidden>
+                <button type="button" class="btn btn-small btn-outline" id="disconnectBtn">Disconnect</button>
+                <button type="button" class="btn btn-small btn-outline" id="inactiveBtn">RPC NOT_ACTIVE</button>
+                <button type="button" class="btn btn-small btn-outline" id="timeoutBtn">Таймаут ожидания</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel notification" aria-labelledby="notification-title">
+            <div class="panel-heading compact"><div><p class="section-overline">ВНЕШНЕЕ СОБЫТИЕ</p><h2 id="notification-title">FLOW_CONTROL notification</h2></div><span class="panel-index">04</span></div>
+            <p class="small-note">Flipper сообщает новое абсолютное окно. Можно отправить уведомление даже во время ожидаемой GATT-записи, чтобы посмотреть порядок событий.</p>
+            <div class="notification-row"><div class="control compact-control"><label for="refillCredit">Новое окно <output id="refillValue" for="refillCredit">486 Б</output></label><input id="refillCredit" type="range" min="0" max="1024" value="486" step="1"></div><button type="button" class="btn btn-blue" id="notifyBtn" disabled>Отправить notification</button></div>
+          </section>
+
+          <section class="panel queue-panel" aria-labelledby="queue-title">
+            <div class="panel-heading compact"><div><p class="section-overline">КОНКУРЕНТНЫЕ ВЫЗОВЫ</p><h2 id="queue-title">Очередь Mutex</h2></div><span class="panel-index">05</span></div>
+            <p class="small-note">Поставь второй <code>send()</code> в очередь. Он начнёт выполняться только после полного завершения первого сообщения.</p>
+            <div class="queue-line"><label for="secondSize">Размер нового сообщения</label><input type="number" id="secondSize" min="1" max="4096" step="1" value="120"><button type="button" class="btn btn-outline" id="enqueueBtn" disabled>Поставить в очередь</button></div>
+            <div class="queue-list" id="queueList"><span class="dim">Ожидающих сообщений нет</span></div>
+          </section>
+
+          <section class="panel log-panel" aria-labelledby="log-title">
+            <div class="panel-heading compact"><div><p class="section-overline">ПОСЛЕДОВАТЕЛЬНОСТЬ ВЫЗОВОВ</p><h2 id="log-title">Журнал событий</h2></div><button type="button" class="btn btn-tiny btn-outline" id="copyLogBtn">Копировать лог</button></div>
+            <ol class="event-log" id="eventLog" aria-label="Журнал операций"><li class="empty-log">Журнал появится после запуска симуляции.</li></ol>
+          </section>
+        </div>
+      </div>
+
+      <section class="help-section">
+        <h2>Что показывает симулятор</h2>
+        <div class="help-grid">
+          <article><span class="help-num">01</span><h3>Фрагментация</h3><p>Каждый RX chunk ограничен MTU − 3, лимитом RX (486 байт) и доступным разрешением Flow Control.</p></article>
+          <article><span class="help-num">02</span><h3>Асинхронная запись</h3><p>После <code>writeCharacteristic()</code> фрагмент считается ожидающим. <code>offset</code> растёт только после <code>onCharacteristicWrite(SUCCESS)</code>.</p></article>
+          <article><span class="help-num">03</span><h3>Сброс окна</h3><p><code>FLOW_CONTROL</code> заменяет оставшийся кредит новым значением, а не прибавляется к нему. Уже зарезервированные байты повторно не вычитаются.</p></article>
+          <article><span class="help-num">04</span><h3>Очередь сообщений</h3><p><code>Mutex</code> не допускает чередования фрагментов двух отправок. При ошибке текущая сессия считается непригодной для продолжения.</p></article>
+        </div>
+        <p class="footnote">Симуляция воспроизводит согласованный алгоритм клиента, но не проверяет реальную прошивку, Bluetooth-стек или protobuf framing. <a href="https://github.com/flipperdevices/flipperzero-firmware/blob/dev/targets/f7/ble_glue/services/serial_service.c" target="_blank" rel="noopener noreferrer">Исходный код Flipper Serial Service ↗</a> · <a href="https://developer.android.com/reference/android/bluetooth/BluetoothGattCallback" target="_blank" rel="noopener noreferrer">Android BluetoothGattCallback ↗</a></p>
+      </section>
+    </main>
+    <footer><span>FLIPPER COMPANION · BLE TRANSPORT DOCUMENTATION</span><span>Pure HTML / CSS / JavaScript · No dependencies</span></footer>
+  </div>
+</body>
+</html>
