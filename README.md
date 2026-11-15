@@ -22,5 +22,5 @@ Android-приложение для подключения к Flipper Zero по 
 
 Интерактивные материалы и схемы алгоритмов размещаются в [`docs/`](docs/).
 
-- [BLE Connection & RPC Initialization]() - блок-схема подключения и инициализации RPC.
-- [BLE RX Transport Simulator]() - интерактивная модель отправки данных с учётом MTU и размера окна передачи.
+- [BLE Connection & RPC Initialization](https://an-onim.github.io/Flipper-Zero-Companion/ble-connection/index.html) - блок-схема подключения и инициализации RPC.
+- [BLE RX Transport Simulator](https://an-onim.github.io/Flipper-Zero-Companion/ble-transport/simulator.html) - интерактивная модель отправки данных с учётом MTU и размера окна передачи.
