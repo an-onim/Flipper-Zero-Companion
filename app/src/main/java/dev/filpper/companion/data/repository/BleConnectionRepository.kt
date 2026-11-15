@@ -52,8 +52,9 @@ import kotlin.time.Duration.Companion.milliseconds
  * All internal Bluetooth lifecycle operations are serialized
  * on the main thread.
  *
- * TODO(transport): add RX/TX byte transport.
- * TODO(rpc): add protobuf framing and RPC client.
+ * // TODO(transport): add RX/TX byte transport.
+ * // TODO(rpc): add protobuf framing and RPC client.
+ * // TODO(refactor): move to separate module
  */
 class BleConnectionRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -339,10 +340,8 @@ class BleConnectionRepositoryImpl @Inject constructor(
         when (characteristic.uuid) {
             FlipperGattUuid.Characteristic.RPC_STATUS.uuid -> RpcStatus.fromBytes(value)?.let {
                 saveRpcState(it)
-                if (it == RpcStatus.ACTIVE) {
-                    if (!GattManager.readFlowControl(gatt)) {
-                        failGatt(gatt, BleFailure.RPCReadError("FlowControl"))
-                    }
+                if (!GattManager.readFlowControl(gatt)) {
+                    failGatt(gatt, BleFailure.RPCReadError("FlowControl"))
                 }
             } ?: Log.e(TAG, "Cannot get RPC status from ${value.contentToString()}")
             FlipperGattUuid.Characteristic.FLOW_CONTROL.uuid -> handleFlowControlValue(value)
@@ -354,14 +353,9 @@ class BleConnectionRepositoryImpl @Inject constructor(
 
         when (characteristic.uuid) {
             FlipperGattUuid.Characteristic.TX.uuid -> handleIncoming(gatt, value)
-            FlipperGattUuid.Characteristic.RPC_STATUS.uuid -> RpcStatus.fromBytes(value)?.let {
-                saveRpcState(it)
-                if (it == RpcStatus.ACTIVE) {
-                    GattManager.readFlowControl(gatt).let{ result ->
-                        if (!result) failGatt(gatt, BleFailure.RPCReadError("FlowControl"))
-                    }
-                }
-            } ?: Log.e(TAG, "Cannot get RPC status from ${value.contentToString()}")
+            FlipperGattUuid.Characteristic.RPC_STATUS.uuid ->
+                RpcStatus.fromBytes(value)?.let(::saveRpcState)
+                    ?: Log.e(TAG, "Cannot get RPC status from ${value.contentToString()}")
             FlipperGattUuid.Characteristic.FLOW_CONTROL.uuid -> handleFlowControlValue(value)
         }
     }
@@ -383,8 +377,6 @@ class BleConnectionRepositoryImpl @Inject constructor(
     }
 
     private fun handleFlowControlValue(value: ByteArray) {
-        if (_rpcStatus.value != RpcStatus.ACTIVE) return
-
         flipperSender.setAvailableBytes(value.toInt(ByteOrder.BIG_ENDIAN) ?: 0)
         Log.d(TAG, "FLOW_CONTROL: ${value.toInt(ByteOrder.BIG_ENDIAN) ?: 0} bytes")
 

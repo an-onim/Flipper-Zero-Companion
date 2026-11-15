@@ -13,6 +13,7 @@ import dev.filpper.companion.data.repository.BleConnectionRepositoryImpl.Compani
 import dev.filpper.companion.domain.model.BleConnectionState
 import dev.filpper.companion.domain.model.BleFailure
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,6 +22,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration.Companion.milliseconds
@@ -44,16 +46,18 @@ internal class FlipperBleSender(
      *
      * @return `null` if all GATT writes completed successfully
      */
-    suspend fun sendRxMessage(message: ByteArray): BleFailure? {
-        if (message.isEmpty()) return BleFailure.RPCError
+    suspend fun sendRxMessage(message: ByteArray): BleFailure? = withContext(Dispatchers.Main) {
+        if (message.isEmpty()) return@withContext BleFailure.RPCError
         val buffer = message.copyOf()
 
-        // TODO(transport): implement framing, fragmentation, Flow Control
+        val gatt = awaitRpcActive() ?: return@withContext BleFailure.RPCError
 
-        return writeRxMutex.withLock {
-            val gatt = awaitRpcActive() ?: return@withLock BleFailure.RPCError
+        // TODO(transport): implement framing
+
+        return@withContext writeRxMutex.withLock {
+            if (!isConnectionValid(gatt)) return@withLock BleFailure.RPCError
+
             var offset = 0
-
             try {
                 while (offset < buffer.size) {
                     currentCoroutineContext().ensureActive()
@@ -229,8 +233,7 @@ internal class FlipperBleSender(
      */
     private suspend fun awaitAvailableBytes(gatt: BluetoothGatt): Int? = withTimeoutOrNull(FLOW_CONTROL_TIMEOUT_MS.milliseconds) {
         combine(availableBytesToSend, isBtConnected, rpcSessionStatus) { credits, connection, rpcStatus ->
-            val ready = isConnectionValid(gatt)
-            credits to ready
+            credits to isConnectionValid(connection, rpcStatus)
         }
             // if the connection was lost or rpc became inactive -> stop it
             .first { (credits, ready) -> credits > 0 || !ready || getGatt() !== gatt }
@@ -243,6 +246,8 @@ internal class FlipperBleSender(
 
     private fun isConnectionValid(gatt: BluetoothGatt) =
         getGatt() == gatt && isBtConnected.value is BleConnectionState.Connected && rpcSessionStatus.value == RpcStatus.ACTIVE
+    private fun isConnectionValid(connection: BleConnectionState, rpcStatus: RpcStatus) =
+        connection is BleConnectionState.Connected && rpcStatus == RpcStatus.ACTIVE
 
 
     companion object {
