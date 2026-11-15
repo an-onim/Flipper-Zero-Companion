@@ -39,7 +39,6 @@
   <button class="stage-header" type="button" aria-expanded="false" aria-controls="detail-discovery">
     <span class="number">01</span>
     <span class="stage-title"><span class="method">BleScanner.start()</span><span class="name">Поиск устройства</span><span class="summary">BLE scan → ScanCallback → выбор Flipper</span></span>
-    <span class="arrow-control">Подробности <span class="chevron" aria-hidden="true">⌄</span></span>
   </button>
   <div class="detail" id="detail-discovery" hidden>
     <div class="detail-top"><div><h3>Поиск устройства</h3><p class="desc">Находим устройство и получаем его Bluetooth-адрес.</p></div><button class="collapse" type="button" aria-label="Свернуть Поиск устройства">Свернуть ↑</button></div>
@@ -51,7 +50,6 @@
   <button class="stage-header" type="button" aria-expanded="false" aria-controls="detail-pairing">
     <span class="number">02</span>
     <span class="stage-title"><span class="method">BlePairingManager.connect()</span><span class="name">Сопряжение</span><span class="summary">Уже bonded? Пропустить pairing. Иначе createBond()</span></span>
-    <span class="arrow-control">Подробности <span class="chevron" aria-hidden="true">⌄</span></span>
   </button>
   <div class="detail" id="detail-pairing" hidden>
     <div class="detail-top"><div><h3>Сопряжение</h3><p class="desc">Проверяем системную пару и при необходимости ждём bonding.</p></div><button class="collapse" type="button" aria-label="Свернуть Сопряжение">Свернуть ↑</button></div>
@@ -63,7 +61,6 @@
   <button class="stage-header" type="button" aria-expanded="false" aria-controls="detail-gatt">
     <span class="number">03</span>
     <span class="stage-title"><span class="method">startGattConnection()</span><span class="name">GATT-соединение</span><span class="summary">connectGatt() → onConnectionStateChange(STATE_CONNECTED)</span></span>
-    <span class="arrow-control">Подробности <span class="chevron" aria-hidden="true">⌄</span></span>
   </button>
   <div class="detail" id="detail-gatt" hidden>
     <div class="detail-top"><div><h3>GATT-соединение</h3><p class="desc">Создаём BluetoothGatt и устанавливаем LE-соединение.</p></div><button class="collapse" type="button" aria-label="Свернуть GATT-соединение">Свернуть ↑</button></div>
@@ -75,7 +72,6 @@
   <button class="stage-header" type="button" aria-expanded="false" aria-controls="detail-services">
     <span class="number">04</span>
     <span class="stage-title"><span class="method">GattManager.validateGattConnection()</span><span class="name">Обнаружение сервисов</span><span class="summary">discoverServices() → onServicesDiscovered() → проверка профиля</span></span>
-    <span class="arrow-control">Подробности <span class="chevron" aria-hidden="true">⌄</span></span>
   </button>
   <div class="detail" id="detail-services" hidden>
     <div class="detail-top"><div><h3>Обнаружение сервисов</h3><p class="desc">Убеждаемся, что Flipper предоставляет нужный Serial Service.</p></div><button class="collapse" type="button" aria-label="Свернуть Обнаружение сервисов">Свернуть ↑</button></div>
@@ -87,7 +83,6 @@
   <button class="stage-header" type="button" aria-expanded="false" aria-controls="detail-subscriptions">
     <span class="number">05</span>
     <span class="stage-title"><span class="method">GattManager.processNextSubscription()</span><span class="name">Подписка на характеристики</span><span class="summary">TX indication → FLOW_CONTROL notify → RPC_STATUS notify</span></span>
-    <span class="arrow-control">Подробности <span class="chevron" aria-hidden="true">⌄</span></span>
   </button>
   <div class="detail" id="detail-subscriptions" hidden>
     <div class="detail-top"><div><h3>Подписка на характеристики</h3><p class="desc">Записываем CCCD строго последовательно, дожидаясь callback.</p></div><button class="collapse" type="button" aria-label="Свернуть Подписка на характеристики">Свернуть ↑</button></div>
@@ -99,7 +94,6 @@
   <button class="stage-header" type="button" aria-expanded="false" aria-controls="detail-rpc-status">
     <span class="number">06</span>
     <span class="stage-title"><span class="method">GattManager.readRpcStatus()</span><span class="name">Проверка RPC_STATUS</span><span class="summary">readCharacteristic() → ACTIVE / NOT_ACTIVE</span></span>
-    <span class="arrow-control">Подробности <span class="chevron" aria-hidden="true">⌄</span></span>
   </button>
   <div class="detail" id="detail-rpc-status" hidden>
     <div class="detail-top"><div><h3>Проверка RPC_STATUS</h3><p class="desc">Определяем, активен ли RPC на Flipper.</p></div><button class="collapse" type="button" aria-label="Свернуть Проверка RPC_STATUS">Свернуть ↑</button></div>
@@ -111,7 +105,6 @@
   <button class="stage-header" type="button" aria-expanded="false" aria-controls="detail-flow-control">
     <span class="number">07</span>
     <span class="stage-title"><span class="method">GattManager.readFlowControl()</span><span class="name">Инициализация FLOW_CONTROL</span><span class="summary">Чтение UInt32 (big-endian) и последующие notify</span></span>
-    <span class="arrow-control">Подробности <span class="chevron" aria-hidden="true">⌄</span></span>
   </button>
   <div class="detail" id="detail-flow-control" hidden>
     <div class="detail-top"><div><h3>Инициализация FLOW_CONTROL</h3><p class="desc">Получаем первоначальное окно отправки и обновления кредита.</p></div><button class="collapse" type="button" aria-label="Свернуть Инициализация FLOW_CONTROL">Свернуть ↑</button></div>
@@ -123,7 +116,6 @@
   <button class="stage-header" type="button" aria-expanded="false" aria-controls="detail-ready">
     <span class="number">08</span>
     <span class="stage-title"><span class="method">FlipperBleSender.sendRxMessage() / FlipperBleReceiver</span><span class="name">Передача данных</span><span class="summary">RPC ACTIVE + доступное окно → RX write / TX indication</span></span>
-    <span class="arrow-control">Подробности <span class="chevron" aria-hidden="true">⌄</span></span>
   </button>
   <div class="detail" id="detail-ready" hidden>
     <div class="detail-top"><div><h3>Передача данных</h3><p class="desc">После проверки условий можно обмениваться байтами.</p></div><button class="collapse" type="button" aria-label="Свернуть Передача данных">Свернуть ↑</button></div>

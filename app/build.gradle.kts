@@ -1,8 +1,8 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.kapt)
+    alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.hilt)
     alias(libs.plugins.protobuf)
 }
@@ -44,6 +44,27 @@ android {
 
 kapt { correctErrorTypes = true }
 
+dependencies {
+    implementation(libs.androidx.core)
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.bundles.lifecycle)
+    implementation(libs.androidx.datastore)
+
+    implementation(libs.protobuf.javalite)
+//    implementation("com.github.flipperdevices:flipperzero-protobuf-jvm")
+
+    kapt(libs.hilt.compiler)
+    implementation(libs.bundles.hilt)
+
+    implementation(platform(libs.compose.bom))
+    implementation(libs.bundles.compose)
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.compose.ui.tooling.preview)
+    debugImplementation(libs.compose.ui.tooling)
+
+    testImplementation(libs.junit)
+}
+
 protobuf {
     protoc { artifact = "com.google.protobuf:protoc:${libs.versions.protobuf.get()}" }
     generateProtoTasks {
@@ -53,28 +74,4 @@ protobuf {
             }
         }
     }
-}
-
-dependencies {
-    implementation(libs.androidx.core)
-    implementation(libs.androidx.activity.compose)
-    implementation(libs.androidx.lifecycle.runtime.compose)
-    implementation(libs.androidx.lifecycle.viewmodel.compose)
-    implementation(libs.androidx.navigation.compose)
-    implementation(libs.androidx.hilt.compose)
-    implementation(libs.androidx.datastore)
-    implementation(libs.kotlinx.coroutines.android)
-    implementation(libs.hilt.android)
-    kapt(libs.hilt.compiler)
-    implementation(libs.protobuf.javalite)
-
-    implementation(platform(libs.compose.bom))
-    implementation(libs.compose.ui)
-    implementation(libs.compose.foundation)
-    implementation(libs.compose.material3)
-    implementation(libs.compose.icons)
-    implementation(libs.compose.ui.tooling.preview)
-    debugImplementation(libs.compose.ui.tooling)
-
-    testImplementation(libs.junit)
 }
