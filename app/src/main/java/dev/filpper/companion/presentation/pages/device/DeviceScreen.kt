@@ -47,21 +47,17 @@ import dev.filpper.companion.presentation.components.FlipperPrimaryButton
 import dev.filpper.companion.presentation.components.InfoPanel
 import dev.filpper.companion.presentation.components.InfoRow
 import dev.filpper.companion.presentation.components.SectionTitle
+import dev.filpper.companion.utils.PermissionChecker
 
 @Composable
 fun DeviceRoute(viewModel: DeviceViewModel = hiltViewModel()) {
 
-    // TODO(rpc): check connection state
+    // TODO(ui): rpc check connection state
 
     val uiState by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val permissions = remember {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
-        } else {
-            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
-        }
-    }
+
+    val permissions = remember { PermissionChecker.requiredPermissions }
     var permissionDenied by rememberSaveable { mutableStateOf(false) }
     var enableDenied by rememberSaveable { mutableStateOf(false) }
 

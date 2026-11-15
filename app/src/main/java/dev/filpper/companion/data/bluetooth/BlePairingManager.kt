@@ -1,8 +1,8 @@
 package dev.filpper.companion.data.bluetooth
 
 import android.annotation.SuppressLint
-import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -21,12 +21,13 @@ import kotlin.time.Duration.Companion.milliseconds
 internal class BlePairingManager(
     private val context: Context,
     private val scope: CoroutineScope,
-    private val adapterProvider: () -> BluetoothAdapter?,
     private val hasConnectPermission: () -> Boolean,
     private val onPairingStarted: (BleDevice) -> Unit,
     private val onSuccessBonding: (BluetoothDevice, BleDevice) -> Unit,
     private val onFailure: (BleFailure) -> Unit,
 ) {
+    private val adapter = context.getSystemService(BluetoothManager::class.java)?.adapter
+
     private var pendingDevice: BleDevice? = null
     private var pendingRemote: BluetoothDevice? = null
     private var bondTimeout: Job? = null
@@ -95,7 +96,7 @@ internal class BlePairingManager(
         }
 
         try {
-            val remote = adapterProvider()
+            val remote = adapter
                 ?.getRemoteDevice(device.address)
                 ?: run {
                     onFailure(BleFailure.BluetoothUnsupported)
