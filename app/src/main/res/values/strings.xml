@@ -17,7 +17,8 @@
     <string name="select_ble_device">Подключиться к %1$s</string>
     <string name="device_connecting">Подключение к %1$s…</string>
     <string name="device_pairing">Ожидание сопряжения с %1$s…</string>
-    <string name="connected_status">BLE / GATT подключён</string>
+    <string name="connected_status">BLE/GATT подключён</string>
+
     <string name="device_info_title">Информация об устройстве</string>
     <string name="device_info_mock">Демонстрационные proto-данные: RPC пока не реализован.</string>
     <string name="device_name_label">Устройство</string>
@@ -27,6 +28,9 @@
     <string name="serial_label">Серийный номер (mock)</string>
     <string name="battery_label">Аккумулятор (mock)</string>
     <string name="percentage">%1$d%%</string>
+
+    <string name="command_ping">Отправить ping</string>
+
     <string name="loading_info">Получение демонстрационных данных…</string>
     <string name="files_title">Файлы Flipper</string>
     <string name="files_mock_notice">Пример содержимого памяти. Файлы ещё не считываются с устройства.</string>
@@ -40,6 +44,7 @@
     <string name="category_ibutton">iButton</string>
     <string name="category_badusb">BadUSB</string>
     <string name="category_other">Прочее</string>
+
     <string name="permission_denied">Для поиска устройств необходимо разрешение Bluetooth (на Android 11 - геолокация).</string>
     <string name="bluetooth_disabled">Bluetooth выключен. Включите его для поиска устройств.</string>
     <string name="bluetooth_enable_denied">Без включённого Bluetooth поиск невозможен.</string>

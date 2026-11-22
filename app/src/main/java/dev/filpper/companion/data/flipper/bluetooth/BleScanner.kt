@@ -1,5 +1,4 @@
-
-package dev.filpper.companion.data.bluetooth
+package dev.filpper.companion.data.flipper.bluetooth
 
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter

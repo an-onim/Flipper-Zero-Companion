@@ -10,6 +10,7 @@ sealed interface DeviceIntent {
     data class SelectDevice(val device: BleDevice) : DeviceIntent
     data object Disconnect : DeviceIntent
     data object RefreshInfo : DeviceIntent
+    data object Ping : DeviceIntent
 }
 
 sealed interface DeviceInfoState {

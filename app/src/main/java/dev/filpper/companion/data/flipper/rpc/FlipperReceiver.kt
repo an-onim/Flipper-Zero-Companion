@@ -1,10 +1,10 @@
-package dev.filpper.companion.data.bluetooth
+package dev.filpper.companion.data.flipper.rpc
 
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.consumeAsFlow
 
-internal class FlipperBleReceiver {
+internal class FlipperReceiver {
 
 
     private var channel = createChannel()

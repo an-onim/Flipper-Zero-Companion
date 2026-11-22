@@ -12,8 +12,9 @@ import javax.inject.Inject
 
 @HiltViewModel
 class FilesViewModel @Inject constructor(
-    private val getFiles: GetFlipperFilesUseCase,
+    private val getFiles: GetFlipperFilesUseCase
 ) : ViewModel() {
+
     private val _state = MutableStateFlow(FilesUiState())
     val state = _state.asStateFlow()
 

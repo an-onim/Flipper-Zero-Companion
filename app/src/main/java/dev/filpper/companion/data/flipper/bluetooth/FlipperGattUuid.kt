@@ -1,4 +1,4 @@
-package dev.filpper.companion.data.bluetooth
+package dev.filpper.companion.data.flipper.bluetooth
 
 import java.util.UUID
 

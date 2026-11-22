@@ -1,4 +1,4 @@
-package dev.filpper.companion.data.bluetooth
+package dev.filpper.companion.data.flipper.bluetooth
 
 import android.Manifest
 import android.bluetooth.BluetoothGatt
@@ -8,7 +8,7 @@ import android.bluetooth.BluetoothStatusCodes
 import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresPermission
-import dev.filpper.companion.data.bluetooth.FlipperGattUuid.getCharacteristicByUuid
+import dev.filpper.companion.data.flipper.bluetooth.FlipperGattUuid.getCharacteristicByUuid
 import dev.filpper.companion.domain.model.BleFailure
 
 object GattManager {
@@ -100,9 +100,12 @@ object GattManager {
         return gatt.getService(FlipperGattUuid.SERVICE)
             ?.let { service ->
                 val containsChars = FlipperGattUuid.Characteristic.entries.mapNotNull { service.getCharacteristic(it.uuid) }.size == FlipperGattUuid.Characteristic.entries.size
-                val containsCCCD = service.getCharacteristic(FlipperGattUuid.Characteristic.TX.uuid)?.getDescriptor(FlipperGattUuid.BtSigConst.CCCD) != null
-                        && service.getCharacteristic(FlipperGattUuid.Characteristic.FLOW_CONTROL.uuid)?.getDescriptor(FlipperGattUuid.BtSigConst.CCCD) != null
-                        && service.getCharacteristic(FlipperGattUuid.Characteristic.RPC_STATUS.uuid)?.getDescriptor(FlipperGattUuid.BtSigConst.CCCD) != null
+                val containsCCCD = service.getCharacteristic(FlipperGattUuid.Characteristic.TX.uuid)?.getDescriptor(
+                    FlipperGattUuid.BtSigConst.CCCD) != null
+                        && service.getCharacteristic(FlipperGattUuid.Characteristic.FLOW_CONTROL.uuid)?.getDescriptor(
+                    FlipperGattUuid.BtSigConst.CCCD) != null
+                        && service.getCharacteristic(FlipperGattUuid.Characteristic.RPC_STATUS.uuid)?.getDescriptor(
+                    FlipperGattUuid.BtSigConst.CCCD) != null
                 containsChars && containsCCCD
             } ?: false
     }

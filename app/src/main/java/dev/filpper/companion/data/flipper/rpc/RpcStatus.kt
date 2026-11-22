@@ -1,4 +1,4 @@
-package dev.filpper.companion.data.bluetooth
+package dev.filpper.companion.data.flipper.rpc
 
 enum class RpcStatus(val code: UInt) {
     NOT_ACTIVE(0u),

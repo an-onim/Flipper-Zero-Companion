@@ -24,3 +24,4 @@ Android-приложение для подключения к Flipper Zero по 
 
 - [BLE Connection & RPC Initialization](https://an-onim.github.io/Flipper-Zero-Companion/ble-connection/index.html) - блок-схема подключения и инициализации RPC.
 - [BLE RX Transport Simulator](https://an-onim.github.io/Flipper-Zero-Companion/ble-transport/simulator.html) - интерактивная модель отправки данных с учётом MTU и размера окна передачи.
+- [RPC Exchange Sequence](https://USERNAME.github.io/REPOSITORY/rpc-exchange-sequence/) - диаграмма последовательности для отправки одной команды из приложения во Flipper.

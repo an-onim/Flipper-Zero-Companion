@@ -1,4 +1,4 @@
-package dev.filpper.companion.data.bluetooth
+package dev.filpper.companion.data.flipper.rpc
 
 import android.Manifest
 import android.bluetooth.BluetoothGatt
@@ -7,9 +7,10 @@ import android.bluetooth.BluetoothStatusCodes
 import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresPermission
-import dev.filpper.companion.data.repository.BleConnectionRepositoryImpl.Companion.ATT_WRITE_OVERHEAD
-import dev.filpper.companion.data.repository.BleConnectionRepositoryImpl.Companion.DEFAULT_ATT_MTU
-import dev.filpper.companion.data.repository.BleConnectionRepositoryImpl.Companion.FLIPPER_RX_MAX_SIZE
+import dev.filpper.companion.data.flipper.bluetooth.FlipperGattUuid
+import dev.filpper.companion.data.repository.FlipperRepositoryImpl.Companion.ATT_WRITE_OVERHEAD
+import dev.filpper.companion.data.repository.FlipperRepositoryImpl.Companion.DEFAULT_ATT_MTU
+import dev.filpper.companion.data.repository.FlipperRepositoryImpl.Companion.FLIPPER_RX_MAX_SIZE
 import dev.filpper.companion.domain.model.BleConnectionState
 import dev.filpper.companion.domain.model.BleFailure
 import kotlinx.coroutines.CompletableDeferred
@@ -27,7 +28,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration.Companion.milliseconds
 
-internal class FlipperBleSender(
+internal class FlipperSender(
     private val getGatt: () -> BluetoothGatt?,
     private val isBtConnected: StateFlow<BleConnectionState>,
     private val rpcSessionStatus: StateFlow<RpcStatus>,
@@ -51,8 +52,6 @@ internal class FlipperBleSender(
         val buffer = message.copyOf()
 
         val gatt = awaitRpcActive() ?: return@withContext BleFailure.RPCError
-
-        // TODO(transport): implement framing
 
         return@withContext writeRxMutex.withLock {
             if (!isConnectionValid(gatt)) return@withLock BleFailure.RPCError

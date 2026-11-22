@@ -14,32 +14,38 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import androidx.annotation.RequiresPermission
+import com.flipperdevices.protobuf.FlipperProto
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dev.filpper.companion.utils.Utils.toInt
-import dev.filpper.companion.data.bluetooth.BlePairingManager
-import dev.filpper.companion.data.bluetooth.BleScanner
-import dev.filpper.companion.data.bluetooth.FlipperBleReceiver
-import dev.filpper.companion.data.bluetooth.FlipperGattUuid
-import dev.filpper.companion.data.bluetooth.GattManager
-import dev.filpper.companion.data.bluetooth.FlipperBleSender
-import dev.filpper.companion.data.bluetooth.RpcStatus
+import dev.filpper.companion.data.flipper.bluetooth.BlePairingManager
+import dev.filpper.companion.data.flipper.bluetooth.BleScanner
+import dev.filpper.companion.data.flipper.rpc.FlipperReceiver
+import dev.filpper.companion.data.flipper.bluetooth.FlipperGattUuid
+import dev.filpper.companion.data.flipper.bluetooth.GattManager
+import dev.filpper.companion.data.flipper.rpc.FlipperSender
+import dev.filpper.companion.data.flipper.rpc.RpcMessageFramer
+import dev.filpper.companion.data.flipper.rpc.RpcStatus
 import dev.filpper.companion.domain.model.BleConnectionState
 import dev.filpper.companion.domain.model.BleDevice
 import dev.filpper.companion.domain.model.BleFailure
-import dev.filpper.companion.domain.repository.BleConnectionRepository
+import dev.filpper.companion.domain.repository.FlipperRepository
 import dev.filpper.companion.utils.PermissionChecker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.nio.ByteOrder
+import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration.Companion.milliseconds
 
 /**
@@ -52,14 +58,12 @@ import kotlin.time.Duration.Companion.milliseconds
  * All internal Bluetooth lifecycle operations are serialized
  * on the main thread.
  *
- * // TODO(transport): add RX/TX byte transport.
- * // TODO(rpc): add protobuf framing and RPC client.
  * // TODO(refactor): move to separate module
  */
-class BleConnectionRepositoryImpl @Inject constructor(
+class FlipperRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val permissionChecker: PermissionChecker
-) : BleConnectionRepository {
+) : FlipperRepository {
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -100,14 +104,15 @@ class BleConnectionRepositoryImpl @Inject constructor(
     @Volatile
     private var currentGatt: BluetoothGatt? = null
 
-    private val flipperReceiver = FlipperBleReceiver()
+    private val flipperReceiver = FlipperReceiver()
 
-    private val flipperSender = FlipperBleSender(
+    private val flipperSender = FlipperSender(
         getGatt = { currentGatt },
         isBtConnected = connection,
         rpcSessionStatus = rpcStatus,
         onWriteFail = { gatt -> failGatt(gatt, BleFailure.RPCError) }
     )
+    private val rpcFramer = RpcMessageFramer()
 
 
     // ---------- Public API ---------- //
@@ -202,6 +207,7 @@ class BleConnectionRepositoryImpl @Inject constructor(
             currentGatt = gatt
 
             flipperReceiver.reset()
+            startRpcReceiving(gatt)
 
             connectTimeout = scope.launch {
                 delay(CONNECTION_TIMEOUT_MS.milliseconds)
@@ -384,13 +390,53 @@ class BleConnectionRepositoryImpl @Inject constructor(
         // the active transmission credit window.
     }
 
+    // ---------- RPC Transport ---------- //
+
+    override val nextCommandId = AtomicInteger(1)
+    override val messages = MutableSharedFlow<FlipperProto.Main>()
+
+    private var rpcReceiveJob: Job? = null      // see startRpcReceiving()
+
     private fun handleIncoming(gatt: BluetoothGatt, value: ByteArray) {
         // forward TX bytes to incoming Flow/Channel.
         val accepted = flipperReceiver.onReceive(value)
         if (!accepted) failGatt(gatt, BleFailure.RPCError)
+    }
 
+    private fun startRpcReceiving(gatt: BluetoothGatt) {
+        if (!isCurrentGatt(gatt)) return
+        rpcReceiveJob?.cancel()
 
-        // TODO(transport?): decode framed protobuf messages later.
+        rpcReceiveJob = scope.launch {
+            try {
+                rpcFramer
+                    .decode(flipperReceiver.incomingChunks)
+                    .flowOn(Dispatchers.Default)
+                    .collect { message ->
+                        handleRpcMessage(message)
+                    }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                failGatt(gatt, BleFailure.RPCError)
+            }
+        }
+    }
+
+    override suspend fun sendMessage(message: FlipperProto.Main) = sendRpcMessage(message)
+
+    private suspend fun sendRpcMessage(message: FlipperProto.Main): BleFailure? {
+        val frame = withContext(Dispatchers.Default) {
+            rpcFramer.encode(message)
+        }
+        return flipperSender.sendRxMessage(frame)
+    }
+
+    // TODO(refactor): replace to real handling
+    private fun handleRpcMessage(message: FlipperProto.Main) {
+        Log.d(TAG,
+            "RPC received: commandId=${message.commandId}, content=${message.contentCase}, " +
+                    "status=${message.commandStatus}, hasNext=${message.hasNext}")
     }
 
     // ---------- GATT cleanup ---------- //
@@ -404,6 +450,9 @@ class BleConnectionRepositoryImpl @Inject constructor(
 
         val gatt = currentGatt
         currentGatt = null
+
+        rpcReceiveJob?.cancel()
+        rpcReceiveJob = null
 
         flipperReceiver.close()
         gatt?.let(flipperSender::onGattClosed)

@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a0d14">
+  <meta name="description" content="Интерактивная диаграмма последовательности RPC Ping между Android и Flipper Zero: protobuf framing, BLE RX/TX, байтовые фрагменты и decode().">
+  <title>RPC Exchange — Flipper Zero Companion</title>
+  <style>
+:root{color-scheme:dark;--bg:#0a0d14;--panel:#111722;--panel2:#151e2b;--line:#2a3447;--line2:#202b3c;--ink:#eef2f9;--muted:#9cabc0;--dim:#6e7e97;--orange:#ff982f;--cyan:#70c9ed;--green:#78d6aa;--purple:#c5adff;--red:#ff898d;--r:15px;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;min-width:320px;background:radial-gradient(ellipse 62% 23% at 76% 0%,rgba(129,67,29,.16),transparent 82%),var(--bg);color:var(--ink);font-size:14px;line-height:1.5}button{cursor:pointer;font:inherit}button:disabled{opacity:.35;cursor:not-allowed}a{color:inherit;text-decoration:none}a:hover{color:var(--orange)}h1,h2,h3,p{margin:0}code,kbd,.step-counter,.status-copy,.stream-label span,.byte,.chunk-chip,.code-detail{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace}code{color:#eabb96;font-size:.92em}.page{max-width:1580px;margin:auto;padding:0 28px}.topbar{min-height:85px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line2);gap:20px}.brand{display:flex;align-items:center;gap:12px;white-space:nowrap}.brand-icon{height:37px;width:37px;display:grid;place-content:center;background:#301d16;border:1px solid #a45f30;border-radius:11px;color:var(--orange);font-size:24px;font-weight:900;letter-spacing:-.14em}.brand-icon span{color:#fff}.brand b{display:block;font-size:14px;letter-spacing:-.02em}.brand small{display:block;margin-top:2px;font-size:9px;color:var(--dim);letter-spacing:.18em}.links{display:flex;flex-wrap:wrap;gap:25px;font-size:12px;color:var(--muted)}.eyebrow{display:flex;align-items:center;gap:12px;color:var(--orange);font-size:10px;font-weight:800;letter-spacing:.17em;margin-top:46px}.eyebrow i{display:block;width:26px;height:2px;background:var(--orange)}.hero{display:flex;justify-content:space-between;gap:25px;align-items:end;margin:14px 0 28px}.hero h1{font-size:clamp(42px,5vw,68px);line-height:1.05;letter-spacing:-.057em;margin-bottom:13px}.hero h1 span{color:var(--orange)}.hero p{font-size:15px;color:var(--muted);line-height:1.85;max-width:820px}.hero-meta{display:flex;gap:9px;flex-shrink:0}.hero-meta>div{border:1px solid var(--line);border-radius:12px;min-width:135px;padding:13px 16px;background:#111722}.hero-meta small{display:block;font-size:9px;letter-spacing:.14em;color:var(--dim);margin-bottom:5px}.hero-meta strong{font-size:13px}.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r)}.toolbar{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:15px;margin-bottom:19px}.scenario-buttons{display:flex;gap:9px;min-width:0}.scenario{border:1px solid #313e52;border-radius:11px;background:#17202e;color:var(--ink);display:flex;align-items:center;gap:11px;text-align:left;padding:10px 12px;min-width:185px}.scenario.active{border-color:#ad6d37;background:linear-gradient(120deg,#33241d,#1b202c)}.scenario:hover{border-color:#b57542}.scenario-index{width:30px;height:31px;flex:0 0 30px;display:grid;place-items:center;border-radius:7px;background:#283449;color:var(--dim);font:11px ui-monospace,monospace}.scenario.active .scenario-index{background:#603922;color:#ffbd7a}.scenario b,.scenario small{display:block}.scenario b{font-size:12px}.scenario small{color:var(--muted);font-size:10px;margin-top:3px}.actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:8px}.btn{border:1px solid transparent;border-radius:9px;font-size:12px;font-weight:740;padding:11px 14px;white-space:nowrap;transition:background .16s,border-color .16s}.btn.primary{background:var(--orange);color:#21140a;box-shadow:0 2px 14px rgba(255,152,47,.15)}.btn.primary:hover{background:#ffad55}.btn.outline{background:#263b4b;border-color:#35576d;color:#c6e8f7}.btn.outline:hover{background:#2e4b61}.btn.ghost{border-color:#364155;background:#202a3a;color:#c7d2e2}.btn.ghost:hover{background:#2b384c}.status-line{display:flex;justify-content:space-between;align-items:center;gap:12px;color:var(--muted);font-size:11px;margin-bottom:10px}.status-copy{display:flex;gap:9px;align-items:center;color:#d5dfed}.live-dot{width:8px;height:8px;border-radius:50%;background:var(--orange);box-shadow:0 0 0 4px rgba(255,152,47,.1)}.live-dot.done{background:var(--green);box-shadow:0 0 0 4px rgba(120,214,170,.12)}kbd{display:inline-grid;place-items:center;min-width:23px;height:20px;margin:0 2px;background:#202a39;border:1px solid #38485d;border-radius:5px;color:#b7cce0}.progress-track{height:5px;width:100%;background:#1e2837;border-radius:5px;overflow:hidden;margin-bottom:22px}.progress-fill{width:0;height:100%;background:linear-gradient(90deg,#e27436,var(--orange));transition:width .25s ease}.workspace{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(330px,.8fr);align-items:start;gap:17px}.diagram-panel{min-width:0;padding:20px 0 0}.panel-head{padding:0 20px;display:flex;align-items:end;justify-content:space-between;gap:20px}.section-label{display:block;font-size:9px;color:var(--orange);letter-spacing:.16em;font-weight:800;margin-bottom:6px}.panel-head h2,.inspector h2{font-size:18px;letter-spacing:-.025em}.legend,.byte-legend{display:flex;flex-wrap:wrap;gap:13px;font-size:10px;color:var(--muted)}.legend span,.byte-legend span{display:inline-flex;gap:6px;align-items:center}.swatch{width:9px;height:9px;border-radius:3px;display:inline-block}.swatch.outbound{background:var(--orange)}.swatch.inbound{background:var(--cyan)}.swatch.internal{background:var(--purple)}.swatch.length{background:var(--orange)}.swatch.protobuf{background:var(--cyan)}.swatch.highlight{background:transparent;outline:2px solid #fff3bf}.session-banner{background:#161e2c;border:1px dashed #344159;color:var(--muted);font-size:11px;line-height:1.8;margin:16px 20px 10px;border-radius:10px;padding:10px 12px}.session-banner b{color:#d9e5f2}.session-led{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);margin-right:8px}.session-banner .subtle{color:var(--dim)}.diagram-scroll{width:100%;overflow:auto;max-height:calc(100vh - 150px);min-height:270px;scrollbar-width:thin;scrollbar-color:#45536b transparent;outline:0}.diagram-scroll:focus-visible{box-shadow:inset 0 0 0 2px #bb813d}.diagram-scroll svg{display:block;width:100%;min-width:955px;min-height:225px;overflow:visible}.diagram-footer{border-top:1px solid var(--line2);padding:12px 20px 15px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;color:var(--dim);font-size:10px}.inspector{display:grid;gap:14px;min-width:0}.inspector .panel{padding:20px}.aside-head{display:flex;justify-content:space-between;align-items:start;gap:12px}.step-counter{font-size:10px;color:#becfe5;background:#263246;border:1px solid #35445b;padding:5px 7px;border-radius:6px}.step-type{color:var(--orange);font-size:10px;letter-spacing:.1em;font-weight:800;margin:14px 0 6px}.inspector h2{line-height:1.32}.step-description{font-size:12px;color:var(--muted);line-height:1.8;margin:12px 0 16px}.step-route{display:flex;align-items:center;gap:7px;margin-bottom:20px;flex-wrap:wrap}.route-node{background:#1c2b3b;border:1px solid #30435a;border-radius:7px;color:#bfd7e8;font-size:10px;font-weight:650;padding:7px 8px}.route-arrow{color:var(--orange);font-weight:700}.code-label{font-size:9px;letter-spacing:.13em;color:var(--dim);font-weight:750;margin-bottom:8px}.code-detail{display:block;background:#0c131d;border:1px solid #2b384a;padding:12px;border-radius:9px;color:#c3dae9;font-size:10.5px;line-height:1.8;overflow-wrap:anywhere}.byte-badge{font:10px ui-monospace,monospace;color:#f3ba83;border-radius:14px;border:1px solid #67452c;background:#32251e;padding:5px 8px}.bytes-panel h2{margin-bottom:12px}.byte-legend{gap:10px;margin-bottom:18px}.stream-label{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:10px}.stream-label b{font-size:11px}.stream-label span{color:var(--dim);font-size:10px;white-space:nowrap}.byte-strip{display:flex;flex-wrap:wrap;gap:4px;max-height:178px;min-height:37px;overflow:auto;padding:3px 1px;scrollbar-width:thin}.byte{color:#78bfd5;border:1px solid #315069;background:#162c3b;border-radius:5px;padding:6px 6px;font-size:10px;line-height:1;transition:transform .15s,opacity .15s}.byte.prefix{color:#ffbf7f;background:#3a271d;border-color:#7e4c29}.byte.dimmed{opacity:.33}.byte.selected{color:white;outline:2px solid #fff0be;outline-offset:1px;transform:translateY(-1px)}.stream-state{font:10.5px/1.7 ui-monospace,monospace;color:#8ea6c2;margin-top:11px;min-height:35px}.split-block{border-top:1px solid var(--line2);margin-top:15px;padding-top:15px}.chunk-bars{display:flex;gap:5px;min-height:35px}.chunk-chip{flex:1 1 0;background:#1c3142;border:1px solid #3a5b6c;color:#bcdded;border-radius:7px;min-width:0;text-align:center;padding:9px 4px;font-size:10px;white-space:nowrap}.chunk-chip.outgoing{background:#3b291f;border-color:#785032;color:#ffd0a0}.chunk-chip.active{box-shadow:0 0 0 2px #e2c58e;transform:translateY(-1px)}.chunk-chip.dimmed{opacity:.5}.micro-note{color:var(--dim);font-size:10px;line-height:1.7;margin-top:9px}.summary-panel{min-width:0}.pair{display:flex;align-items:center;gap:9px;margin-top:10px}.pair>div{min-width:0;flex:1;background:#0c131d;border:1px solid #2b384a;border-radius:8px;padding:9px 10px}.pair b{color:var(--muted);font-size:10px;display:block;margin-bottom:6px}.pair code{display:block;font-size:10px;word-break:break-word;max-height:70px;overflow:auto}.pair-arrow{color:var(--orange);font-size:20px}.summary-panel p{color:var(--muted);font-size:11px;line-height:1.8;margin-top:12px}.note-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:23px 0 33px}.note-card{border:1px solid var(--line);border-radius:13px;background:#111722;padding:19px;display:flex;gap:12px}.note-number{color:var(--orange);font:11px ui-monospace,monospace;flex:none}.note-card h3{font-size:13px;margin-bottom:8px}.note-card p{font-size:11px;color:var(--muted);line-height:1.8}footer{border-top:1px solid var(--line2);padding:21px 0 33px;display:flex;justify-content:space-between;gap:14px;color:var(--dim);font-size:11px}footer div{display:flex;gap:20px;flex-wrap:wrap}footer a{color:#a3bad2}
+/* SVG diagram semantics */
+.actor-group{cursor:default}.actor-pill{fill:#1b2533;stroke:#37465c;stroke-width:1.2}.actor-pill.flipper{fill:#2b231e;stroke:#725033}.actor-name{font-size:13px;fill:#f0f3f9;font-weight:750;text-anchor:middle}.actor-sub{fill:#91a3b9;font-size:10px;text-anchor:middle}.lane-line{stroke:#38475d;stroke-dasharray:5 6;stroke-width:1.2}.event-group{cursor:pointer;outline:none}.event-group .event-bg{fill:transparent;stroke:transparent;stroke-width:1}.event-group:hover .event-bg{fill:#ffffff07}.event-group.selected .event-bg{fill:#ffad3c0d;stroke:#ffab4a38}.event-id-bg{fill:#1a2736;stroke:#2d3f56}.event-id{fill:#879eb6;font:10px ui-monospace,monospace;text-anchor:middle}.event-group.selected .event-id-bg{fill:#4e3020;stroke:#a96838}.event-group.selected .event-id{fill:#ffb575}.arrow-out{stroke:#ffac60;fill:none;stroke-width:2.3}.arrow-in{stroke:#79cdea;fill:none;stroke-width:2.3}.arrow-internal{stroke:#baa7f9;fill:none;stroke-width:2.1}.arrow-label-bg{fill:#111722}.arrow-label{fill:#e1eaf3;font:11px Inter,system-ui,sans-serif;text-anchor:middle;font-weight:650}.arrow-hex{fill:#8fa9c3;font:10px ui-monospace,monospace;text-anchor:middle}.zero-state{fill:#70839b;text-anchor:middle;font:13px Inter,system-ui,sans-serif}.phase-divider{stroke:#33445a;stroke-width:1;stroke-dasharray:4 7}.phase-text{fill:#7590ac;font:10px ui-monospace,monospace;letter-spacing:1.4px}
+@media(max-width:1350px){.workspace{grid-template-columns:minmax(0,1.35fr) minmax(310px,.8fr)}.toolbar{flex-wrap:wrap}.actions{justify-content:flex-start}.diagram-scroll svg{min-width:955px}}
+@media(max-width:950px){.page{padding:0 17px}.workspace{grid-template-columns:1fr}.diagram-scroll{max-height:640px}.diagram-panel{grid-row:1}.inspector{grid-template-columns:1fr 1fr;align-items:start}.inspector-main{grid-row:span 2}.hero-meta{display:none}.note-grid{grid-template-columns:1fr 1fr}.panel-head{flex-wrap:wrap}.toolbar{gap:12px}.scenario-buttons{flex:1}.scenario{flex:1}}
+@media(max-width:650px){.page{padding:0 12px}.topbar{padding:15px 0;min-height:auto;flex-wrap:wrap;gap:15px}.links{gap:12px;font-size:10px;width:100%;justify-content:space-between}.eyebrow{margin-top:32px}.hero{margin-bottom:22px}.hero h1{font-size:46px}.hero p{font-size:13px;line-height:1.8}.toolbar{padding:12px}.scenario-buttons{width:100%}.scenario{padding:9px;min-width:0}.scenario b{font-size:11px}.scenario small{font-size:9px}.actions{width:100%;display:grid;grid-template-columns:1fr 1fr}.actions .btn{padding:10px 7px;white-space:normal}.hint-key{display:none}.diagram-panel{padding-top:15px}.panel-head{padding:0 13px}.session-banner{margin:13px 13px 8px}.diagram-footer{padding:11px 13px}.inspector{grid-template-columns:1fr}.inspector-main{grid-row:auto}.inspector .panel{padding:17px}.note-grid{grid-template-columns:1fr}.pair{gap:5px}.byte-strip{max-height:150px}footer{flex-direction:column}.status-line{font-size:10px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;scroll-behavior:auto!important}}
+
+@media(min-width:1000px){.diagram-scroll svg{min-width:0}}
+.diagram-scroll.expanded{max-height:none;overflow-x:auto;overflow-y:visible}
+@media(max-width:950px){.diagram-scroll.expanded svg{min-width:955px}}
+
+  </style>
+
+</head>
+<body>
+<div class="page">
+  <header class="topbar">
+    <div class="brand"><span class="brand-icon">F<span>.</span></span><span><b>Flipper Companion</b><small>TECHNICAL DOCUMENTATION</small></span></div>
+    <nav class="links" aria-label="Разделы документации"><a href="../index.html">Все материалы</a><a href="../rpc-framing-decode/">Frame Decoder</a><a href="../ble-connection/">BLE Connection</a></nav>
+  </header>
+  <main>
+    <div class="eyebrow"><i></i> RPC / PROTOBUF / BLE TRANSPORT</div>
+    <div class="hero">
+      <div><h1>RPC <span>Exchange</span></h1><p>Как <code>Flipper.Main(SystemPingRequest)</code> проходит через framing, GATT RX и RPC-сервер, а затем возвращается как <code>SystemPingResponse</code> через TX indications.</p></div>
+      <div class="hero-meta"><div><small>PROTOCOL</small><strong>Protobuf / BLE</strong></div><div><small>SCENARIO</small><strong>System.Ping</strong></div></div>
+    </div>
+
+    <div class="toolbar panel" aria-label="Управление диаграммой">
+      <div class="scenario-buttons" role="group" aria-label="Сценарий обмена">
+        <button class="scenario active" type="button" id="simpleScenario" aria-pressed="true"><span class="scenario-index">01</span><span><b>Короткий Ping</b><small>5 байт · один RX и TX</small></span></button>
+        <button class="scenario" type="button" id="splitScenario" aria-pressed="false"><span class="scenario-index">02</span><span><b>С фрагментацией</b><small>47 байт · по 3 фрагмента</small></span></button>
+      </div>
+      <div class="actions">
+        <button id="prevBtn" type="button" class="btn ghost" title="Вернуться на предыдущий шаг">← Назад</button>
+        <button id="nextBtn" type="button" class="btn primary">Следующий шаг <span aria-hidden="true">→</span></button>
+        <button id="allBtn" type="button" class="btn outline">Показать всю схему</button>
+        <button id="resetBtn" type="button" class="btn ghost">Сначала ↺</button>
+      </div>
+    </div>
+
+    <div class="status-line"><div class="status-copy"><span id="statusDot" class="live-dot"></span><span id="progressText" aria-live="polite">Готово к началу · 0 / 10</span></div><span class="hint-key">Клавиши <kbd>→</kbd> <kbd>←</kbd> для переключения</span></div>
+    <div class="progress-track"><div id="progressFill" class="progress-fill"></div></div>
+
+    <div class="workspace">
+      <section class="diagram-panel panel" aria-labelledby="diagramTitle">
+        <div class="panel-head"><div><span class="section-label">01 / SEQUENCE DIAGRAM</span><h2 id="diagramTitle">Последовательность обмена</h2></div><div class="legend"><span><i class="swatch outbound"></i> Android → Flipper</span><span><i class="swatch inbound"></i> Flipper → Android</span><span><i class="swatch internal"></i> Внутренний вызов</span></div></div>
+        <div class="session-banner"><span class="session-led"></span><b>Начальные условия:</b> GATT подключён · TX indications включены · RPC_STATUS = ACTIVE · FLOW_CONTROL разрешает отправку <span class="subtle">(инициализация здесь не показана)</span></div>
+        <div class="diagram-scroll" id="diagramViewport" tabindex="0" aria-label="Диаграмма последовательности, горизонтальная прокрутка на узких экранах"><svg id="sequenceDiagram" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Пошаговая диаграмма обмена между Android и Flipper Zero"></svg></div>
+        <div class="diagram-footer"><span>Время идёт сверху вниз <span aria-hidden="true">↓</span></span><span>Выбери видимый шаг на диаграмме, чтобы открыть подробности.</span></div>
+      </section>
+
+      <aside class="inspector" aria-label="Инспектор выбранного шага">
+        <section class="panel inspector-main" aria-labelledby="inspectorTitle"><div class="aside-head"><span class="section-label">02 / STEP INSPECTOR</span><span id="stepCounter" class="step-counter">—</span></div>
+          <div class="step-type" id="stepType">ОЖИДАНИЕ</div><h2 id="inspectorTitle">Начни обмен</h2><p id="stepDescription" class="step-description">Нажми «Следующий шаг», чтобы показать создание RPC-команды и движение байтов между слоями.</p>
+          <div id="stepRoute" class="step-route"><span class="route-node">Android RPC</span><span class="route-arrow">→</span><span class="route-node">Flipper RPC</span></div>
+          <div class="code-label">ВЫЗОВ / СОБЫТИЕ</div><code id="codeDetail" class="code-detail">Flipper.Main → framing → BLE → Flipper</code>
+        </section>
+        <section class="panel bytes-panel" aria-labelledby="bytesTitle"><div class="aside-head"><span class="section-label">03 / BYTE STREAM</span><span id="bytesBadge" class="byte-badge">Ping</span></div><h2 id="bytesTitle">Что передаётся</h2><div class="byte-legend"><span><i class="swatch length"></i> Varint (длина)</span><span><i class="swatch protobuf"></i> PB.Main</span><span><i class="swatch highlight"></i> Текущий фрагмент</span></div>
+          <div class="stream-label"><b id="streamTitle">Запрос · RX</b><span id="streamMeta">5 байт всего</span></div>
+          <div id="byteStrip" class="byte-strip" aria-label="Байты передаваемого кадра"></div>
+          <div class="stream-state" id="streamState">04 — длина protobuf (4 байта), остальное — сериализованный Flipper.Main.</div>
+          <div class="split-block"><div class="stream-label"><b id="chunkTitle">BLE-разбиение</b><span id="chunkMeta">MTU 23</span></div><div class="chunk-bars" id="chunkBars"></div><p class="micro-note" id="chunkNote">Для короткого Ping весь кадр помещается в одну GATT-запись.</p></div>
+        </section>
+        <section class="panel summary-panel"><span class="section-label">04 / MESSAGE PAIR</span><div class="pair"><div><b>Запрос</b><code id="requestHex">04 08 01 2A 00</code></div><span class="pair-arrow">↕</span><div><b>Ответ</b><code id="responseHex">04 08 01 32 00</code></div></div><p>Префикс длины <code>04</code> одинаков. <code>2A</code> — поле <code>system_ping_request = 5</code>, <code>32</code> — поле <code>system_ping_response = 6</code>.</p></section>
+      </aside>
+    </div>
+
+    <section class="note-grid" aria-label="Технические пояснения"><div class="note-card"><span class="note-number">01</span><div><h3>RX/TX — со стороны Flipper</h3><p>Android пишет в <b>RX</b> характеристику Flipper. Ответ Flipper отправляет через <b>TX</b> indications, которые принимает <code>FlipperReceiver</code>.</p></div></div><div class="note-card"><span class="note-number">02</span><div><h3>Framing ≠ BLE fragmentation</h3><p>Префикс Varint обозначает длину <b>PB.Main</b>, а не BLE-пакета. Границы RX-записей и TX indications не обязаны совпадать с границами RPC-сообщения.</p></div></div><div class="note-card"><span class="note-number">03</span><div><h3>Иллюстративные BLE-границы</h3><p>В сценарии фрагментации условно взят <b>ATT MTU = 23</b> (20 байт данных на передачу). Реальное разбиение TX может отличаться; protobuf-байты и их длины точные для показанного примера.</p></div></div></section>
+    <footer><span>Flipper Zero Companion · интерактивная документация</span><div><a href="https://github.com/flipperdevices/flipperzero-protobuf/blob/dev/flipper.proto" target="_blank" rel="noopener noreferrer">flipper.proto</a><a href="https://github.com/flipperdevices/flipperzero-firmware/blob/dev/applications/services/rpc/rpc_system.c" target="_blank" rel="noopener noreferrer">rpc_system.c</a><a href="https://protobuf.dev/programming-guides/encoding/" target="_blank" rel="noopener noreferrer">Protobuf encoding</a></div></footer>
+  </main>
+</div>
+<script id="rpc-sequence-core">
+/* Standalone browser script: works with file:// and GitHub Pages. */
+(function () {
+'use strict';
+/** A deterministic, documented Ping wire example derived from flipper.proto/system.proto. */
+const MTU = 23;
+const ATT_PAYLOAD = MTU - 3;
+const ASCII_40 = '0123456789012345678901234567890123456789';
+
+function encodeVarint(value) {
+  if (!Number.isSafeInteger(value) || value < 0 || value > 0xFFFFFFFF) throw new RangeError('uint32 required');
+  const result = [];
+  do {
+    let octet = value & 0x7f;
+    value = Math.floor(value / 128);
+    if (value !== 0) octet |= 0x80;
+    result.push(octet);
+  } while (value);
+  return result;
+}
+function hex(bytes) {
+  return [...bytes].map(byte => byte.toString(16).toUpperCase().padStart(2, '0')).join(' ');
+}
+function makePingFrame(kind, data = []) {
+  if (kind !== 'request' && kind !== 'response') throw new Error('Unknown Ping kind');
+  const content = data.length ? [0x0a, ...encodeVarint(data.length), ...data] : [];
+  const field = kind === 'request' ? 0x2a : 0x32;
+  // PB.Main { command_id:1, oneof content { system_ping_request/response } }
+  const pb = [0x08, 0x01, field, ...encodeVarint(content.length), ...content];
+  return [...encodeVarint(pb.length), ...pb];
+}
+function splitFrame(bytes, maximum = ATT_PAYLOAD) {
+  if (!Number.isInteger(maximum) || maximum <= 0) throw new RangeError('Invalid fragment size');
+  const out = [];
+  for (let offset = 0; offset < bytes.length; offset += maximum) {
+    out.push({ offset, bytes: bytes.slice(offset, offset + maximum) });
+  }
+  return out;
+}
+function item(from, to, label, title, description, code, extra = {}) {
+  return { from, to, label, title, description, code, direction: 'internal', phase: 'request', ...extra };
+}
+function buildScenario(fragmented = false) {
+  const data = fragmented ? [...new TextEncoder().encode(ASCII_40)] : [];
+  const request = makePingFrame('request', data);
+  const response = makePingFrame('response', data);
+  const rx = splitFrame(request);
+  const tx = splitFrame(response);
+  const events = [];
+  events.push(item(0, 0, 'Flipper.Main.newBuilder()', 'Создаём SystemPingRequest',
+    `Android формирует Flipper.Main с command_id = 1 и system_ping_request. ${fragmented ? 'Внутри запроса есть 40 байт data.' : 'Внутреннее сообщение PingRequest пустое.'}`,
+    fragmented ? 'Flipper.Main { command_id = 1, system_ping_request.data = 40 bytes }' : 'Flipper.Main { command_id = 1, system_ping_request = {} }', { type: 'OBJECT', range: null }));
+  events.push(item(0, 1, 'encode(request)', 'Передаём PB.Main в framer',
+    'RPC-слой вызывает RpcMessageFramer.encode(). На этом уровне мы работаем с protobuf-объектом, а не с GATT.',
+    'rpcMessageFramer.encode(pingRequest)', { type: 'CALL' }));
+  events.push(item(1, 2, 'Varint(N) + PB.Main', 'Получен готовый RPC-кадр',
+    `writeDelimitedTo() создаёт ${request.length} байт: префикс ${hex(request.slice(0, 1))} кодирует длину protobuf ${request.length - 1} байт. Отдаём массив в sendRxMessage().`,
+    `sendRxMessage(byteArrayOf(${request.map(b => '0x' + b.toString(16).padStart(2, '0')).slice(0, 8).join(', ')}${request.length > 8 ? ', …' : ''}))`, { type: 'FRAMING', range: [0, request.length] }));
+  rx.forEach((fragment, i) => {
+    events.push(item(2, 3, `GATT RX · write #${i+1} (${fragment.bytes.length} B)`, `Отправляем RX-фрагмент ${i+1} из ${rx.length}`,
+      `FlipperSender записывает байты ${fragment.offset + 1}–${fragment.offset + fragment.bytes.length} из единого RPC-кадра в RX-характеристику Flipper. ${i + 1 < rx.length ? 'Перед следующей записью ожидается успешный onCharacteristicWrite().' : 'После успешного onCharacteristicWrite() отправка кадра завершена.'}`,
+      `gatt.writeCharacteristic(RX, ${fragment.bytes.length} bytes, WRITE_TYPE_DEFAULT)`,
+      { type: 'GATT WRITE', direction: 'outbound', range: [fragment.offset, fragment.offset + fragment.bytes.length], index: i, fragments: rx }));
+  });
+  events.push(item(3, 4, 'RPC stream · PB_DECODE_DELIMITED', 'Flipper восстанавливает входящий PB.Main',
+    `Serial Service передаёт полученные RX-байты в RPC stream. RPC worker читает Varint и ${request.length - 1} байт protobuf, затем декодирует PB.Main. BLE-фрагменты здесь уже не имеют значения.`,
+    'pb_decode_ex(..., PB_DECODE_DELIMITED)', { type: 'FLIPPER RPC', direction: 'outbound', range: [0, request.length] }));
+  events.push(item(4, 4, 'System.Ping → echo(data)', 'Flipper обрабатывает Ping',
+    `RPC-обработчик проверяет has_next и формирует SystemPingResponse с тем же command_id = 1.${fragmented ? ' Он копирует 40 байт data из запроса в ответ.' : ' Поле data остаётся пустым.'} Статус OK = 0 поэтому не обязан кодироваться в proto3.`,
+    'rpc_system_system_ping_process(request, context)', { type: 'HANDLER', phase: 'response', range: null }));
+  events.push(item(4, 3, 'PB_ENCODE_DELIMITED', 'Flipper формирует ответ',
+    `Flipper сериализует PB.Main с system_ping_response (поле 6) и префиксом длины. Ответ занимает ${response.length} байт.`,
+    'pb_encode_ex(..., PB_ENCODE_DELIMITED)', { type: 'RESPONSE', direction: 'inbound', phase: 'response', range: [0, response.length] }));
+  tx.forEach((fragment, i) => {
+    events.push(item(3, 2, `GATT TX · indication #${i+1} (${fragment.bytes.length} B)`, `Получаем TX-фрагмент ${i+1} из ${tx.length}`,
+      `Flipper передаёт байты ${fragment.offset + 1}–${fragment.offset + fragment.bytes.length} ответа через TX-характеристику. Android получает их в onCharacteristicChanged(). Разбиение TX здесь показано условно по ${ATT_PAYLOAD} байт.`,
+      'onCharacteristicChanged(gatt, TX, value)',
+      { type: 'GATT INDICATION', direction: 'inbound', phase: 'response', range: [fragment.offset, fragment.offset + fragment.bytes.length], index: i, fragments: tx }));
+    const count = fragment.offset + fragment.bytes.length;
+    const received = Math.min(Math.max(count - 1, 0), response.length - 1);
+    events.push(item(2, 1, `Channel → decode() #${i+1}`, i + 1 === tx.length ? 'Декодер собрал полный ответ' : `Накоплено ${received} / ${response.length - 1} байт PB.Main`,
+      `handleIncoming() вызывает flipperReceiver.onReceive(value). Фрагмент попадает в Channel, а затем в RpcMessageFramer.decode(). ${i + 1 === tx.length ? 'Получены все байты payload; вызывается Flipper.Main.parseFrom().' : `Varint уже прочитан, но payload ещё не полон (${received} из ${response.length - 1} байт); decode() ожидает продолжение.`}`,
+      i + 1 === tx.length ? 'Flipper.Main.parseFrom(payload)' : `payload: received = ${received}, expected = ${response.length - 1}`,
+      { type: 'DEFRAMING', direction: 'inbound', phase: 'response', range: [fragment.offset, fragment.offset + fragment.bytes.length], index: i, fragments: tx, received }));
+  });
+  events.push(item(1, 0, 'emit(Flipper.Main)', 'Ответ передан RPC-слою Android',
+    'Framer выдаёт Flipper.Main(SystemPingResponse), command_id = 1. Коллектор получает сообщение в handleRpcMessage(); последующая корреляция command_id относится к будущему RPC-клиенту.',
+    'collect { message -> handleRpcMessage(message) }', { type: 'COMPLETE', direction: 'inbound', phase: 'response', range: [0, response.length] }));
+  return { id: fragmented ? 'fragmented' : 'simple', data, request, response, rx, tx, events };
+}
+
+
+window.RpcSequenceCore = Object.freeze({ MTU, ATT_PAYLOAD, ASCII_40, encodeVarint, hex, makePingFrame, splitFrame, buildScenario });
+})();
+
+</script>
+<script id="rpc-sequence-ui">
+const { buildScenario, hex } = window.RpcSequenceCore;
+
+const ns = 'http://www.w3.org/2000/svg';
+const $ = id => document.getElementById(id);
+const actorNames = ['Android RPC', 'RpcMessageFramer', 'BLE Transport', 'Flipper BLE', 'Flipper RPC'];
+const actorSubs = ['Flipper.Main', 'encode() / decode()', 'Sender / Receiver', 'Serial Service', 'RPC server'];
+const laneX = [118, 346, 576, 803, 1028];
+const diagramWidth = 1156;
+const headerBottom = 116;
+const eventBase = 175;
+const eventHeight = 92;
+let scenario = buildScenario(false);
+let visibleCount = 0;
+let selectedIndex = -1;
+
+function element(tag, attrs = {}, text = null) {
+  const el = document.createElementNS(ns, tag);
+  for (const [key, value] of Object.entries(attrs)) el.setAttribute(key, String(value));
+  if (text !== null) el.textContent = text;
+  return el;
+}
+function append(parent, tag, attrs = {}, text = null) {
+  const child = element(tag, attrs, text);
+  parent.appendChild(child);
+  return child;
+}
+function colorClass(event) {
+  if (event.direction === 'outbound') return 'out';
+  if (event.direction === 'inbound') return 'in';
+  return 'internal';
+}
+function arrowHex(event) {
+  if (!event.range) return '';
+  const frame = event.phase === 'request' ? scenario.request : scenario.response;
+  const bytes = frame.slice(...event.range);
+  const short = bytes.length > 20 ? [...bytes.slice(0, 12), '…', ...bytes.slice(-3)] : bytes;
+  return short.map(b => typeof b === 'number' ? b.toString(16).toUpperCase().padStart(2,'0') : b).join(' ');
+}
+function drawHeader(svg) {
+  laneX.forEach((x, index) => {
+    const g = append(svg, 'g', { class: 'actor-group' });
+    append(g, 'rect', { x: x-100, y: 12, width: 200, height: 72, rx: 11, class: `actor-pill ${index > 2 ? 'flipper' : ''}` });
+    append(g, 'text', { x, y: 42, class: 'actor-name' }, actorNames[index]);
+    append(g, 'text', { x, y: 62, class: 'actor-sub' }, actorSubs[index]);
+  });
+}
+function displayName(event) {
+  return event.from === event.to ? `${actorNames[event.from]} (локально)` : `${actorNames[event.from]} → ${actorNames[event.to]}`;
+}
+function drawEvent(svg, event, index) {
+  const y = eventBase + index * eventHeight;
+  const group = append(svg, 'g', { class: `event-group ${index === selectedIndex ? 'selected' : ''}`, tabindex: '0', role: 'button', 'aria-label': `Шаг ${index+1}: ${event.title}`, 'data-step': index });
+  append(group,'rect',{x:0,y:y-42,width:diagramWidth,height:82,rx:8,class:'event-bg'});
+  append(group,'rect',{x:18,y:y-11,width:32,height:24,rx:6,class:'event-id-bg'});
+  append(group,'text',{x:34,y:y+5,class:'event-id'},String(index+1).padStart(2,'0'));
+  let labelX;
+  if (event.from === event.to) {
+    const x = laneX[event.from];
+    const loopEnd = event.from === 4 ? x + 91 : x + 94;
+    append(group, 'path', { d: `M ${x+4} ${y-7} L ${loopEnd} ${y-7} L ${loopEnd} ${y+15} L ${x+5} ${y+15}`, class: `arrow-${colorClass(event)}`, 'marker-end': `url(#arrow-${colorClass(event)})` });
+    labelX = x+72;
+  } else {
+    const x1=laneX[event.from];
+    const x2=laneX[event.to];
+    const sign=x2>x1?1:-1;
+    append(group, 'line', { x1:x1+sign*6, y1:y+9, x2:x2-sign*9, y2:y+9, class:`arrow-${colorClass(event)}`, 'marker-end':`url(#arrow-${colorClass(event)})` });
+    labelX=(x1+x2)/2;
+  }
+  const label = event.label.length > 39 ? event.label.slice(0,36)+'…' : event.label;
+  const labelWidth = Math.min(395,Math.max(118,label.length*6.4+16));
+  append(group,'rect',{x:labelX-labelWidth/2,y:y-21,width:labelWidth,height:20,rx:4,class:'arrow-label-bg'});
+  append(group,'text',{x:labelX,y:y-7,class:'arrow-label'},label);
+  const h=arrowHex(event);
+  if (h) {
+    const reduced = h.length > 65 ? h.slice(0,61)+'…' : h;
+    append(group,'text',{x:labelX,y:y+34,class:'arrow-hex'},reduced);
+  }
+  group.addEventListener('click',()=>select(index));
+  group.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();select(index)}});
+  return group;
+}
+function renderDiagram() {
+  const svg=$('sequenceDiagram');
+  const height = visibleCount ? eventBase + visibleCount*eventHeight + 20 : 265;
+  svg.replaceChildren();
+  svg.setAttribute('viewBox',`0 0 ${diagramWidth} ${height}`);
+  svg.setAttribute('height',height);
+  const defs=append(svg,'defs');
+  [['out','#ffac60'],['in','#79cdea'],['internal','#baa7f9']].forEach(([key,color])=>{
+    const m=append(defs,'marker',{id:`arrow-${key}`,viewBox:'0 0 10 10',refX:'9',refY:'5',markerWidth:'6',markerHeight:'6',orient:'auto-start-reverse'});
+    append(m,'path',{d:'M 0 0 L 10 5 L 0 10 z',fill:color});
+  });
+  for(const x of laneX) append(svg,'line',{x1:x,y1:84,x2:x,y2:height-12,class:'lane-line'});
+  drawHeader(svg);
+  if(!visibleCount){
+    append(svg,'text',{x:diagramWidth/2,y:174,class:'zero-state'},'Нажми «Следующий шаг», чтобы начать обмен');
+    append(svg,'text',{x:diagramWidth/2,y:197,class:'zero-state'},'Сначала создадим Flipper.Main(SystemPingRequest)');
+  }
+  scenario.events.slice(0,visibleCount).forEach((event,index)=>drawEvent(svg,event,index));
+}
+function scrollToEvent(index) {
+  if(index<0)return;
+  const viewport=$('diagramViewport');
+  const svg=$('sequenceDiagram');
+  const viewHeight=viewport.clientHeight;
+  const scale=svg.getBoundingClientRect().height / Number(svg.getAttribute('height'));
+  const target=(eventBase+index*eventHeight)*scale;
+  if(target>viewport.scrollTop+viewHeight-90 || target < viewport.scrollTop+105) {
+    viewport.scrollTo({ top:Math.max(0,target-viewHeight*.55),behavior:'smooth' });
+  }
+}
+function renderBytes(event) {
+  const phase=event?.phase??'request';
+  const frame=phase==='request'?scenario.request:scenario.response;
+  const fragments=phase==='request'?scenario.rx:scenario.tx;
+  const range=event?.range;
+  $('streamTitle').textContent=phase==='request'?'Запрос · RX':'Ответ · TX';
+  $('streamMeta').textContent=`${frame.length} байт всего`;
+  $('bytesBadge').textContent=phase==='request'?'REQUEST':'RESPONSE';
+  const strip=$('byteStrip'); strip.replaceChildren();
+  frame.forEach((byte,index)=>{
+    const e=document.createElement('span');
+    e.className=`byte ${index===0?'prefix':'payload'}${range&&index>=range[0]&&index<range[1]?' selected':''}${range&&(index<range[0]||index>=range[1])?' dimmed':''}`;
+    e.textContent=byte.toString(16).toUpperCase().padStart(2,'0');
+    e.title=`Байт ${index+1} из ${frame.length}`;
+    strip.append(e);
+  });
+  const bar=$('chunkBars');bar.replaceChildren();
+  fragments.forEach((frag,i)=>{
+    const e=document.createElement('span');
+    const active=event&&event.index===i&&((phase==='request'&&event.type==='GATT WRITE')||(phase==='response'&&(event.type==='GATT INDICATION'||event.type==='DEFRAMING')));
+    e.className=`chunk-chip ${phase==='request'?'outgoing':''}${active?' active':''}${event&&event.index!==undefined&&event.index!==i?' dimmed':''}`;
+    e.textContent=`#${i+1} · ${frag.bytes.length} Б`;
+    e.title=hex(frag.bytes);
+    bar.append(e);
+  });
+  const prefix=frame[0].toString(16).toUpperCase().padStart(2,'0');
+  const phaseLabel=phase==='request'?'RX-запись':'TX indication';
+  $('streamState').textContent=event?.range
+    ? `Выделено ${range[1]-range[0]} байт (${range[0]+1}–${range[1]}). Varint ${prefix} → PB.Main = ${frame.length-1} Б.`
+    : `Varint ${prefix} → длина PB.Main = ${frame.length-1} Б; полный RPC-кадр = ${frame.length} Б.`;
+  $('chunkMeta').textContent=`ATT MTU 23 · ${phaseLabel}`;
+  $('chunkNote').textContent=`${fragments.length} ${fragments.length===1?'фрагмент':'фрагмента'} ${fragments.map(x=>x.bytes.length+' Б').join(' + ')}. Пример разбиения при MTU = 23; TX-границы могут отличаться.`;
+}
+function renderInspector() {
+  const event=selectedIndex>=0?scenario.events[selectedIndex]:null;
+  $('stepCounter').textContent=event?`${selectedIndex+1} / ${scenario.events.length}`:'—';
+  $('stepType').textContent=event?.type||'ОЖИДАНИЕ';
+  $('inspectorTitle').textContent=event?.title||'Начни обмен';
+  $('stepDescription').textContent=event?.description||'Нажми «Следующий шаг», чтобы показать создание RPC-команды и движение байтов между слоями.';
+  $('codeDetail').textContent=event?.code||'Flipper.Main → framing → BLE → Flipper';
+  const from=event?actorNames[event.from]:'Android RPC';
+  const to=event?actorNames[event.to]:'Flipper RPC';
+  const route=$('stepRoute');route.replaceChildren();
+  for(const [cls,name] of [['route-node',from],['route-arrow',event?.from===event?.to?'↻':'→'],['route-node',to]]){
+    const s=document.createElement('span');s.className=cls;s.textContent=name;route.append(s);
+  }
+  renderBytes(event);
+}
+function updateStatus() {
+  const total=scenario.events.length;
+  const done=visibleCount>=total;
+  $('progressText').textContent=`${done?'Весь обмен раскрыт':'Шаги раскрыты'} · ${visibleCount} / ${total}`;
+  $('progressFill').style.width=`${100*visibleCount/total}%`;
+  $('statusDot').classList.toggle('done',done);
+  $('nextBtn').disabled=done;
+  $('prevBtn').disabled=visibleCount===0;
+  $('allBtn').disabled=done;
+  $('resetBtn').disabled=visibleCount===0;
+}
+function render() {renderDiagram();renderInspector();updateStatus();}
+function select(index) {
+  if(index<0||index>=visibleCount)return;
+  selectedIndex=index;render();scrollToEvent(index);
+}
+function next() {
+  if(visibleCount>=scenario.events.length)return;
+  visibleCount++;
+  selectedIndex=visibleCount-1;
+  render();scrollToEvent(selectedIndex);
+}
+function prev() {
+  if(visibleCount<=0)return;
+  $('diagramViewport').classList.remove('expanded');
+  visibleCount--;
+  selectedIndex=visibleCount-1;
+  render();scrollToEvent(selectedIndex);
+}
+function showAll() {
+  visibleCount=scenario.events.length;
+  selectedIndex=visibleCount-1;
+  $('diagramViewport').classList.add('expanded');
+  render();
+  $('diagramViewport').scrollTo({top:0,behavior:'instant'});
+}
+function reset() {
+  visibleCount=0;selectedIndex=-1;$('diagramViewport').classList.remove('expanded');
+  render();$('diagramViewport').scrollTo({top:0,behavior:'smooth'});
+}
+function setScenario(fragmented) {
+  scenario=buildScenario(fragmented);
+  $('simpleScenario').classList.toggle('active',!fragmented);
+  $('splitScenario').classList.toggle('active',fragmented);
+  $('simpleScenario').setAttribute('aria-pressed',String(!fragmented));
+  $('splitScenario').setAttribute('aria-pressed',String(fragmented));
+  $('requestHex').textContent=hex(scenario.request);
+  $('responseHex').textContent=hex(scenario.response);
+  reset();
+}
+$('nextBtn').addEventListener('click',next);
+$('prevBtn').addEventListener('click',prev);
+$('allBtn').addEventListener('click',showAll);
+$('resetBtn').addEventListener('click',reset);
+$('simpleScenario').addEventListener('click',()=>setScenario(false));
+$('splitScenario').addEventListener('click',()=>setScenario(true));
+document.addEventListener('keydown',e=>{
+  if(e.altKey||e.ctrlKey||e.metaKey||['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
+  if(e.key==='ArrowRight'){e.preventDefault();next()}
+  if(e.key==='ArrowLeft'){e.preventDefault();prev()}
+});
+setScenario(false);
+
+</script>
+</body>
+</html>

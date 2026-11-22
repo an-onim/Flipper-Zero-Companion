@@ -1,12 +1,10 @@
 package dev.filpper.companion.presentation.pages.device
 
-import android.Manifest
 import android.app.Activity
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -109,6 +107,7 @@ fun DeviceRoute(viewModel: DeviceViewModel = hiltViewModel()) {
         onConnect = { viewModel.onIntent(DeviceIntent.SelectDevice(it)) },
         onDisconnect = { viewModel.onIntent(DeviceIntent.Disconnect) },
         onRefresh = { viewModel.onIntent(DeviceIntent.RefreshInfo) },
+        sendPing = { viewModel.onIntent(DeviceIntent.Ping) }
     )
 }
 
@@ -122,6 +121,7 @@ private fun DeviceScreen(
     onConnect: (BleDevice) -> Unit,
     onDisconnect: () -> Unit,
     onRefresh: () -> Unit,
+    sendPing: () -> Unit
 ) {
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
@@ -166,6 +166,7 @@ private fun DeviceScreen(
                         DeviceInfoState.Failed -> Text(stringResource(R.string.bluetooth_unknown_error))
                     }
                 }
+                FlipperPrimaryButton(stringResource(R.string.command_ping), sendPing)
                 FlipperPrimaryButton(stringResource(R.string.refresh_info), onRefresh)
                 FlipperOutlinedButton(stringResource(R.string.disconnect_device), onDisconnect)
             }
