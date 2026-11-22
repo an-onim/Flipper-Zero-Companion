@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onSubscription
 import javax.inject.Inject
+import kotlin.collections.set
 
 class PingUseCase @Inject constructor(private val repository: FlipperRepository) {
     suspend operator fun invoke() {
@@ -23,42 +24,43 @@ class PingUseCase @Inject constructor(private val repository: FlipperRepository)
         if (failure != null) {
             Log.e("PingUseCase", "RPC Ping send failed: $failure")
         }
+
     }
 }
 
 
 class GetFlipperInfoUseCase @Inject constructor(private val repository: FlipperRepository) {
     suspend operator fun invoke(): FlipperDeviceInfo {
-        val commandId = repository.nextCommandId.getAndIncrement()
-        val command = FlipperProto.Main.newBuilder()
-            .setCommandId(commandId)
-            .setSystemDeviceInfoRequest(SystemProto.DeviceInfoRequest.getDefaultInstance())
-            .build()
-
-        val values = linkedMapOf<String, String>()
-        // subscribing and sending message
-        repository.messages
-            .onSubscription {
-                val failure = repository.sendMessage(command)
-                if(failure == null) {
-                    Log.e("GetFlipperInfoUseCase", "DeviceInfo request failed: $failure" )
-                }
-            }
-            .filter { it.commandId == commandId }
-            .onEach { response ->
-                check(response.commandStatus == FlipperProto.CommandStatus.OK) { "RPC error: ${response.commandStatus}" }
-                check(response.hasSystemDeviceInfoResponse()) { "Unexpected DeviceInfo response" }
-
-                val data = response.systemDeviceInfoResponse
-                values[data.key] = data.value
-            }
-            .first {!it.hasNext}
-        Log.v("GetFlipperInfoUseCase", "DeviceInfo result: ${values.entries.joinToString(prefix = "{", postfix = "}") { "${it.key} - ${it.value}, " }}")
-
-        val failure = repository.sendMessage(command)
-        if (failure != null) {
-            Log.e("GetFlipperInfoUseCase", "RPC DeviceInfo send failed: $failure")
-        }
+//        val commandId = repository.nextCommandId.getAndIncrement()
+//        val command = FlipperProto.Main.newBuilder()
+//            .setCommandId(commandId)
+//            .setSystemDeviceInfoRequest(SystemProto.DeviceInfoRequest.getDefaultInstance())
+//            .build()
+//
+//        val values = linkedMapOf<String, String>()
+//        // subscribing and sending message
+//        repository.messages
+//            .onSubscription {
+//                val failure = repository.sendMessage(command)
+//                if (failure == null) {
+//                    Log.e("GetFlipperInfoUseCase", "DeviceInfo request failed: $failure" )
+//                }
+//            }
+//            .filter { it.commandId == commandId }
+//            .onEach { response ->
+//                check(response.commandStatus == FlipperProto.CommandStatus.OK) { "RPC error: ${response.commandStatus}" }
+//                check(response.hasSystemDeviceInfoResponse()) { "Unexpected DeviceInfo response" }
+//
+//                val data = response.systemDeviceInfoResponse
+//                values[data.key] = data.value
+//            }
+//            .first {!it.hasNext}
+//        Log.v("GetFlipperInfoUseCase", "DeviceInfo result: ${values.entries.joinToString(prefix = "{", postfix = "}") { "${it.key} - ${it.value}, " }}")
+//
+//        val failure = repository.sendMessage(command)
+//        if (failure != null) {
+//            Log.e("GetFlipperInfoUseCase", "RPC DeviceInfo send failed: $failure")
+//        }
 
         // TODO(transport): parsing.
         return FlipperDeviceInfo(

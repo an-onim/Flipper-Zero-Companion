@@ -414,6 +414,7 @@ class FlipperRepositoryImpl @Inject constructor(
                     .flowOn(Dispatchers.Default)
                     .collect { message ->
                         handleRpcMessage(message)
+                        messages.emit(message)
                     }
             } catch (e: CancellationException) {
                 throw e
